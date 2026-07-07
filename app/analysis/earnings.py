@@ -1,3 +1,6 @@
+from app.analysis.result import AnalysisResult
+
+
 class EarningsAnalyzer:
     def analyze(self):
-        return "Not implemented"
+        return AnalysisResult(summary="Not implemented")

@@ -8,4 +8,6 @@ def test_earnings_analyzer_can_be_created():
 
 def test_analyze_returns_placeholder():
     analyzer = EarningsAnalyzer()
-    assert analyzer.analyze() == "Not implemented"
+    result = analyzer.analyze()
+
+    assert result.summary == "Not implemented"
