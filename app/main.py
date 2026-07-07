@@ -1,5 +1,5 @@
-from assistant import ask_agent
-from reporting import save_report
+from app.assistant import ask_agent
+from app.reporting import save_report
 
 print("OptionAgent gestartet")
 print()
