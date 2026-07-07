@@ -6,9 +6,9 @@ class EarningsAnalyzer:
         self.market_data = market_data
 
     def analyze(self, symbol: str):
-        snapshot = self.market_data.get_snapshot(symbol)
+        market_snapshot = self.market_data.get_snapshot(symbol)
 
         return AnalysisResult(
-    symbol=snapshot.symbol,
-    snapshot=snapshot,
-)
+            symbol=market_snapshot.symbol,
+            snapshot=market_snapshot,
+        )
