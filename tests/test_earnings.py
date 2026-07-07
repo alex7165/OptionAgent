@@ -23,3 +23,7 @@ def test_analyze_returns_market_price_summary():
     assert result.symbol == "NVDA"
     assert result.summary == "NVDA: price 100.0 USD"
     assert result.snapshot.quote.price == 100.0
+
+    assert result.snapshot.earnings is not None
+    assert result.snapshot.earnings.symbol == "NVDA"
+    assert result.snapshot.earnings.source == "dummy"
