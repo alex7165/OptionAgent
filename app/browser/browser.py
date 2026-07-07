@@ -1,6 +1,5 @@
+from app.browser.screenshot_service import ScreenshotService
 from app.browser.cookie_manager import CookieManager
-
-from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
@@ -17,6 +16,7 @@ class BrowserClient:
         self.context = None
         self.page = None
         self.cookies = CookieManager(self._require_context)
+        self.screenshots = ScreenshotService(self._require_page)
 
         self.tab_manager = TabManager(
             self._require_context,
@@ -84,17 +84,7 @@ class BrowserClient:
         return page.locator("body").inner_text()
 
     def screenshot(self, path: str):
-        page = self._require_page()
-
-        screenshot_path = Path(path)
-        screenshot_path.parent.mkdir(parents=True, exist_ok=True)
-
-        page.screenshot(
-            path=str(screenshot_path),
-            full_page=True,
-        )
-
-        return screenshot_path
+        return self.screenshots.save(path)
 
     def click(self, selector: str):
         self.interaction.click(selector)
