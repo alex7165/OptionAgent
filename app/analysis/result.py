@@ -1,10 +1,14 @@
+from dataclasses import dataclass
+
+from app.analysis.earnings_analysis import EarningsAnalysis
 from app.marketdata.models import MarketSnapshot
 
 
+@dataclass
 class AnalysisResult:
-    def __init__(self, symbol: str, snapshot: MarketSnapshot):
-        self.symbol = symbol
-        self.snapshot = snapshot
+    symbol: str
+    snapshot: MarketSnapshot
+    earnings: EarningsAnalysis | None = None
 
     @property
     def summary(self) -> str:
@@ -14,11 +18,14 @@ class AnalysisResult:
             f"{self.snapshot.quote.currency}"
         )
 
-        if self.snapshot.earnings is None:
+        if self.earnings is None:
+            return base
+
+        if not self.earnings.has_earnings:
             return f"{base}, no earnings date available"
 
         return (
             f"{base}, "
-            f"earnings {self.snapshot.earnings.report_date}, "
-            f"{self.snapshot.earnings.timing}"
+            f"earnings {self.earnings.report_date}, "
+            f"{self.earnings.timing}"
         )
