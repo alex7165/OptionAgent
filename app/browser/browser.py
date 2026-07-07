@@ -83,6 +83,35 @@ class BrowserClient:
         page = self._require_page()
         return page.locator("body").inner_text()
 
+    def collect_request_urls(self, url: str) -> list[str]:
+        page = self._require_page()
+        request_urls = []
+
+        page.on("request", lambda request: request_urls.append(request.url))
+        page.goto(url)
+        page.wait_for_timeout(5000)
+
+        return request_urls
+
+    def collect_responses(self, url: str) -> list[dict]:
+        page = self._require_page()
+        responses = []
+
+        def handle_response(response):
+            responses.append(
+                {
+                    "url": response.url,
+                    "status": response.status,
+                    "content_type": response.headers.get("content-type", ""),
+                }
+            )
+
+        page.on("response", handle_response)
+        page.goto(url)
+        page.wait_for_timeout(5000)
+
+        return responses
+
     def screenshot(self, path: str):
         return self.screenshots.save(path)
 
