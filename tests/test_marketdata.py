@@ -1,3 +1,4 @@
+from app.marketdata.finviz_earnings_calendar_provider import FinvizEarningsCalendarProvider
 from app.marketdata.yahoo_provider import YahooPriceProvider
 from app.marketdata.dummy_earnings_provider import DummyEarningsProvider
 from datetime import date
@@ -74,4 +75,8 @@ def test_market_data_service_returns_earnings_event():
 
 def test_yahoo_price_provider_exists():
     provider = YahooPriceProvider()
+    assert provider is not None
+
+def test_finviz_earnings_calendar_provider_exists():
+    provider = FinvizEarningsCalendarProvider()
     assert provider is not None
