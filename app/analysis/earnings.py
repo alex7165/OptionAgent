@@ -1,2 +1,3 @@
 class EarningsAnalyzer:
-    pass
+    def analyze(self):
+        return "Not implemented"
