@@ -19,3 +19,4 @@ def test_analyze_returns_placeholder():
     result = analyzer.analyze("NVDA")
 
     assert result.summary == "NVDA: price 100.0 USD"
+    assert result.snapshot.quote.price == 100.0

@@ -11,4 +11,5 @@ class EarningsAnalyzer:
         return AnalysisResult(
     symbol=snapshot.symbol,
     summary=f"{snapshot.symbol}: price {snapshot.quote.price} {snapshot.quote.currency}",
+    snapshot=snapshot,
 )
