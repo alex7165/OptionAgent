@@ -6,4 +6,8 @@ class EarningsAnalyzer:
         self.market_data = market_data
 
     def analyze(self, symbol: str):
-        return AnalysisResult(summary=f"Analysis for {symbol} not implemented")
+        snapshot = self.market_data.get_snapshot(symbol)
+
+        return AnalysisResult(
+            summary=f"{snapshot.symbol}: price {snapshot.quote.price} {snapshot.quote.currency}"
+        )

@@ -18,4 +18,4 @@ def test_analyze_returns_placeholder():
     analyzer = create_analyzer()
     result = analyzer.analyze("NVDA")
 
-    assert result.summary == "Analysis for NVDA not implemented"
+    assert result.summary == "NVDA: price 100.0 USD"
