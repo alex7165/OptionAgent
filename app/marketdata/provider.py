@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 
-from app.marketdata.models import StockData
+from app.marketdata.models import Quote
 
 
-class StockDataProvider(ABC):
+class PriceProvider(ABC):
 
     @abstractmethod
-    def get_stock(self, symbol: str) -> StockData:
+    def get_quote(self, symbol: str) -> Quote:
         pass

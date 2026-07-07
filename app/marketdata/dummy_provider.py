@@ -1,11 +1,11 @@
-from app.marketdata.models import StockData
-from app.marketdata.provider import StockDataProvider
+from app.marketdata.models import Quote
+from app.marketdata.provider import PriceProvider
 
 
-class DummyStockDataProvider(StockDataProvider):
+class DummyPriceProvider(PriceProvider):
 
-    def get_stock(self, symbol: str) -> StockData:
-        return StockData(
+    def get_quote(self, symbol: str) -> Quote:
+        return Quote(
             symbol=symbol.upper(),
             price=100.0,
             currency="USD",

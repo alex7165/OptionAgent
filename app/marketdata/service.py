@@ -1,11 +1,16 @@
-from app.marketdata.models import StockData
-from app.marketdata.provider import StockDataProvider
+from app.marketdata.models import MarketSnapshot
+from app.marketdata.provider import PriceProvider
 
 
 class MarketDataService:
 
-    def __init__(self, stock_provider: StockDataProvider):
-        self.stock_provider = stock_provider
+    def __init__(self, price_provider: PriceProvider):
+        self.price_provider = price_provider
 
-    def get_stock(self, symbol: str) -> StockData:
-        return self.stock_provider.get_stock(symbol)
+    def get_snapshot(self, symbol: str) -> MarketSnapshot:
+        quote = self.price_provider.get_quote(symbol)
+
+        return MarketSnapshot(
+            symbol=symbol.upper(),
+            quote=quote,
+        )

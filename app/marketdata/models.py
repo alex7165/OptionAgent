@@ -1,13 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
-
-
-@dataclass
-class StockData:
-    symbol: str
-    price: float | None = None
-    currency: str | None = None
-    source: str | None = None
 
 
 @dataclass
@@ -45,3 +37,12 @@ class EarningsEvent:
     report_date: date
     timing: str | None = None
     source: str | None = None
+
+
+@dataclass
+class MarketSnapshot:
+    symbol: str
+    quote: Quote | None = None
+    earnings: EarningsEvent | None = None
+    option_chain: OptionChain | None = None
+    news: list[str] = field(default_factory=list)
