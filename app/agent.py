@@ -1,23 +1,20 @@
-from app.ai.client import ask_agent
-from app.reports.reporting import save_report
+from app.planner.planner import Planner
 
 
 class OptionAgent:
+
+    def __init__(self):
+        self.planner = Planner()
 
     def run(self):
 
         print("OptionAgent gestartet")
         print()
 
-        question = input("Frage an den Agenten: ")
+        task = input("Aufgabe: ")
 
-        answer = ask_agent(question)
-
-        report = save_report(question, answer)
+        result = self.planner.execute(task)
 
         print()
-        print("Antwort:")
-        print(answer)
-
-        print()
-        print(f"Report gespeichert unter: {report}")
+        print("Ergebnis:")
+        print(result)

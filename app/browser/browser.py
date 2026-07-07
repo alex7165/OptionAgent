@@ -16,16 +16,31 @@ class BrowserClient:
 
     def goto(self, url: str):
         if self.page is None:
-            raise RuntimeError("Browser wurde noch nicht gestartet. Erst browser.start() aufrufen.")
+            raise RuntimeError(
+                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
+            )
+
         self.page.goto(url)
 
     def get_title(self) -> str:
         if self.page is None:
-            raise RuntimeError("Browser wurde noch nicht gestartet. Erst browser.start() aufrufen.")
+            raise RuntimeError(
+                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
+            )
+
         return self.page.title()
+
+    def get_text(self) -> str:
+        if self.page is None:
+            raise RuntimeError(
+                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
+            )
+
+        return self.page.locator("body").inner_text()
 
     def close(self):
         if self.browser:
             self.browser.close()
+
         if self.playwright:
             self.playwright.stop()
