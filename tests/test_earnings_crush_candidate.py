@@ -15,6 +15,6 @@ def test_earnings_crush_candidate_can_be_created():
     candidate = EarningsCrushCandidate(earnings_event=event)
 
     assert candidate.earnings_event.symbol == "NVDA"
-    assert candidate.expected_move is None
+    assert candidate.option_data is None
     assert candidate.passed_rules == []
     assert candidate.failed_rules == []

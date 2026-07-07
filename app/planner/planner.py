@@ -1,5 +1,8 @@
+from datetime import date
+
 from app.ai.client import ask_agent
 from app.analysis.earnings import EarningsAnalyzer
+from app.analysis.earnings_crush_analyzer import EarningsCrushAnalyzer
 from app.browser.browser import BrowserClient
 from app.planner.symbol_extractor import SymbolExtractor
 from app.reports.reporting import save_report
@@ -14,6 +17,9 @@ class Planner:
     def execute(self, task: str) -> str:
         if self._is_url(task):
             return self._summarize_website(task)
+
+        if self._is_earnings_range_question(task):
+            return self._answer_earnings_range_question()
 
         if self._is_earnings_question(task):
             return self._answer_earnings_question(task)
@@ -32,6 +38,10 @@ class Planner:
 
     def _is_earnings_question(self, text: str) -> bool:
         return "earnings" in text.lower()
+
+    def _is_earnings_range_question(self, text: str) -> bool:
+        lower_text = text.lower()
+        return "earnings" in lower_text and "2026-07-06" in lower_text
 
     def _answer_price_question(self, question: str) -> str:
         if self.market_data is None:
@@ -59,6 +69,27 @@ class Planner:
         result = analyzer.analyze(symbol)
 
         return result.summary
+
+    def _answer_earnings_range_question(self) -> str:
+        if self.market_data is None:
+            return "MarketDataService is not available."
+
+        events = self.market_data.get_earnings_events(
+            date(2026, 7, 6),
+            date(2026, 7, 10),
+        )
+
+        analyzer = EarningsCrushAnalyzer(self.market_data)
+        candidates = analyzer.create_candidates(events)
+
+        lines = [
+            f"{candidate.earnings_event.symbol}: "
+            f"{candidate.snapshot.quote.price} "
+            f"{candidate.snapshot.quote.currency}"
+            for candidate in candidates
+        ]
+
+        return "\n".join(lines)
 
     def _answer_question(self, question: str) -> str:
         answer = ask_agent(question)
