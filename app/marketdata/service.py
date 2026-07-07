@@ -1,10 +1,15 @@
+from app.marketdata.earnings_provider import EarningsProvider
 from app.marketdata.models import MarketSnapshot
 from app.marketdata.provider import PriceProvider
 
 
 class MarketDataService:
 
-    def __init__(self, price_provider: PriceProvider, earnings_provider=None):
+    def __init__(
+        self,
+        price_provider: PriceProvider,
+        earnings_provider: EarningsProvider | None = None,
+    ):
         self.price_provider = price_provider
         self.earnings_provider = earnings_provider
 

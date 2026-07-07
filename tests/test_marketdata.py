@@ -1,3 +1,4 @@
+from app.marketdata.dummy_earnings_provider import DummyEarningsProvider
 from datetime import date
 
 from app.marketdata.dummy_provider import DummyPriceProvider
@@ -57,3 +58,15 @@ def test_earnings_event_model():
 
     assert event.symbol == "CRWD"
     assert event.timing == "after_close"
+
+def test_market_data_service_returns_earnings_event():
+    price_provider = DummyPriceProvider()
+    earnings_provider = DummyEarningsProvider()
+    market_data = MarketDataService(price_provider, earnings_provider)
+
+    snapshot = market_data.get_snapshot("nvda")
+
+    assert snapshot.earnings is not None
+    assert snapshot.earnings.symbol == "NVDA"
+    assert snapshot.earnings.timing == "after market close"
+    assert snapshot.earnings.source == "dummy"
