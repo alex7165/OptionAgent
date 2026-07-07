@@ -118,3 +118,19 @@ def test_browser_can_save_and_load_cookies(tmp_path):
 
     finally:
         second_browser.close()
+
+def test_browser_can_interact_with_page():
+    browser = BrowserClient(headless=True)
+
+    try:
+        browser.start()
+        browser.goto("https://example.com")
+
+        browser.wait_for("h1")
+
+        text = browser.get_text()
+
+        assert "Example Domain" in text
+
+    finally:
+        browser.close()

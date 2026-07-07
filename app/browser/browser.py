@@ -3,6 +3,9 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+from app.browser.interaction import BrowserInteraction
+from app.browser.tab_manager import TabManager
+
 
 class BrowserClient:
 
@@ -12,7 +15,18 @@ class BrowserClient:
         self.browser = None
         self.context = None
         self.page = None
-        self.pages = []
+
+        self.tab_manager = TabManager(
+            self._require_context,
+            self._get_page,
+            self._set_page,
+        )
+
+        self.interaction = BrowserInteraction(self._require_page)
+
+    @property
+    def pages(self):
+        return self.tab_manager.pages
 
     def start(self):
         self.playwright = sync_playwright().start()
@@ -22,81 +36,75 @@ class BrowserClient:
         )
 
         self.context = self.browser.new_context()
-
-        self.page = self.context.new_page()
-        self.pages = [self.page]
+        self.tab_manager.initialize()
 
     def new_tab(self):
+        return self.tab_manager.new_tab()
+
+    def select_tab(self, index: int):
+        return self.tab_manager.select_tab(index)
+
+    def current_tab_index(self) -> int:
+        return self.tab_manager.current_tab_index()
+
+    def _require_context(self):
         if self.context is None:
             raise RuntimeError(
                 "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
             )
 
-        self.page = self.context.new_page()
-        self.pages.append(self.page)
+        return self.context
 
-        return self.page
-
-    def select_tab(self, index: int):
-        if not self.pages:
-            raise RuntimeError(
-                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
-            )
-
-        if index < 0 or index >= len(self.pages):
-            raise IndexError("Tab-Index existiert nicht.")
-
-        self.page = self.pages[index]
-
-        return self.page
-
-    def current_tab_index(self) -> int:
+    def _require_page(self):
         if self.page is None:
             raise RuntimeError(
                 "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
             )
 
-        return self.pages.index(self.page)
+        return self.page
+
+    def _get_page(self):
+        return self.page
+
+    def _set_page(self, page):
+        self.page = page
 
     def goto(self, url: str):
-        if self.page is None:
-            raise RuntimeError(
-                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
-            )
-
-        self.page.goto(url)
+        page = self._require_page()
+        page.goto(url)
 
     def get_title(self) -> str:
-        if self.page is None:
-            raise RuntimeError(
-                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
-            )
-
-        return self.page.title()
+        page = self._require_page()
+        return page.title()
 
     def get_text(self) -> str:
-        if self.page is None:
-            raise RuntimeError(
-                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
-            )
-
-        return self.page.locator("body").inner_text()
+        page = self._require_page()
+        return page.locator("body").inner_text()
 
     def screenshot(self, path: str):
-        if self.page is None:
-            raise RuntimeError(
-                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
-            )
+        page = self._require_page()
 
         screenshot_path = Path(path)
         screenshot_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self.page.screenshot(
+        page.screenshot(
             path=str(screenshot_path),
-            full_page=True
+            full_page=True,
         )
 
         return screenshot_path
+
+    def click(self, selector: str):
+        self.interaction.click(selector)
+
+    def fill(self, selector: str, text: str):
+        self.interaction.fill(selector, text)
+
+    def press(self, selector: str, key: str):
+        self.interaction.press(selector, key)
+
+    def wait_for(self, selector: str):
+        self.interaction.wait_for(selector)
 
     def save_cookies(self, path: str):
         if self.context is None:
@@ -132,9 +140,14 @@ class BrowserClient:
     def close(self):
         if self.context:
             self.context.close()
+            self.context = None
 
         if self.browser:
             self.browser.close()
+            self.browser = None
 
         if self.playwright:
             self.playwright.stop()
+            self.playwright = None
+
+        self.page = None
