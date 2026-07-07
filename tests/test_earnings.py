@@ -14,7 +14,7 @@ def test_earnings_analyzer_can_be_created():
     assert analyzer is not None
 
 
-def test_analyze_returns_placeholder():
+def test_analyze_returns_market_price_summary():
     analyzer = create_analyzer()
     result = analyzer.analyze("NVDA")
 
