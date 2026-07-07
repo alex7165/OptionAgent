@@ -1,5 +1,6 @@
-from app.marketdata.yahoo_provider import YahooPriceProvider
+from app.marketdata.dummy_earnings_provider import DummyEarningsProvider
 from app.marketdata.service import MarketDataService
+from app.marketdata.yahoo_provider import YahooPriceProvider
 from app.planner.planner import Planner
 
 
@@ -7,7 +8,8 @@ class OptionAgent:
 
     def __init__(self):
         price_provider = YahooPriceProvider()
-        market_data = MarketDataService(price_provider)
+        earnings_provider = DummyEarningsProvider()
+        market_data = MarketDataService(price_provider, earnings_provider)
 
         self.planner = Planner(market_data=market_data)
 

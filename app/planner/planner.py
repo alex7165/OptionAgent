@@ -1,4 +1,5 @@
 from app.ai.client import ask_agent
+from app.analysis.earnings import EarningsAnalyzer
 from app.browser.browser import BrowserClient
 from app.planner.symbol_extractor import SymbolExtractor
 from app.reports.reporting import save_report
@@ -14,6 +15,9 @@ class Planner:
         if self._is_url(task):
             return self._summarize_website(task)
 
+        if self._is_earnings_question(task):
+            return self._answer_earnings_question(task)
+
         if self._is_price_question(task):
             return self._answer_price_question(task)
 
@@ -25,6 +29,9 @@ class Planner:
     def _is_price_question(self, text: str) -> bool:
         lower_text = text.lower()
         return "kurs" in lower_text or "price" in lower_text
+
+    def _is_earnings_question(self, text: str) -> bool:
+        return "earnings" in text.lower()
 
     def _answer_price_question(self, question: str) -> str:
         if self.market_data is None:
@@ -38,6 +45,20 @@ class Planner:
         snapshot = self.market_data.get_snapshot(symbol)
 
         return f"{snapshot.symbol}: {snapshot.quote.price} {snapshot.quote.currency}"
+
+    def _answer_earnings_question(self, question: str) -> str:
+        if self.market_data is None:
+            return "MarketDataService is not available."
+
+        symbol = self.symbol_extractor.extract(question)
+
+        if symbol is None:
+            return "Kein Börsenkürzel gefunden."
+
+        analyzer = EarningsAnalyzer(self.market_data)
+        result = analyzer.analyze(symbol)
+
+        return result.summary
 
     def _answer_question(self, question: str) -> str:
         answer = ask_agent(question)
