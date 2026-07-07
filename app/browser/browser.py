@@ -28,6 +28,27 @@ class BrowserClient:
 
         return self.page
 
+    def select_tab(self, index: int):
+        if not self.pages:
+            raise RuntimeError(
+                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
+            )
+
+        if index < 0 or index >= len(self.pages):
+            raise IndexError("Tab-Index existiert nicht.")
+
+        self.page = self.pages[index]
+
+        return self.page
+
+    def current_tab_index(self) -> int:
+        if self.page is None:
+            raise RuntimeError(
+                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
+            )
+
+        return self.pages.index(self.page)
+
     def goto(self, url: str):
         if self.page is None:
             raise RuntimeError(

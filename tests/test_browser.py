@@ -29,3 +29,28 @@ def test_browser_can_open_new_tab():
 
     finally:
         browser.close()
+
+def test_browser_can_select_tab():
+    browser = BrowserClient(headless=True)
+
+    try:
+        browser.start()
+
+        first_page = browser.page
+        second_page = browser.new_tab()
+
+        assert browser.current_tab_index() == 1
+
+        selected_page = browser.select_tab(0)
+
+        assert selected_page == first_page
+        assert browser.page == first_page
+        assert browser.current_tab_index() == 0
+
+        browser.select_tab(1)
+
+        assert browser.page == second_page
+        assert browser.current_tab_index() == 1
+
+    finally:
+        browser.close()
