@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.analysis.earnings_analysis import EarningsAnalysis
+from app.analysis.earnings_status import EarningsStatus
 from app.marketdata.models import MarketSnapshot
 
 
@@ -21,7 +22,7 @@ class AnalysisResult:
         if self.earnings is None:
             return base
 
-        if not self.earnings.has_earnings:
+        if self.earnings.status == EarningsStatus.NOT_AVAILABLE:
             return f"{base}, no earnings date available"
 
         return (
