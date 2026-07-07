@@ -1,76 +1,158 @@
-# OptionAgent Architektur
+# Architektur
 
-## Ziel
+## Architekturprinzipien
 
-OptionAgent ist ein persönlicher KI-Agent zur Analyse von Optionsstrategien,
-insbesondere Earnings-Crush-Trades.
+OptionAgent ist nach den Prinzipien der Clean Architecture aufgebaut.
 
-Der Agent soll Daten sammeln, analysieren und Handlungsvorschläge erstellen.
-Er führt niemals selbstständig Orders aus.
+Grundsätze:
+
+- Kleine Klassen
+- Eine Klasse = eine Verantwortung
+- Öffentliche APIs bleiben möglichst stabil
+- Implementierungsdetails sind gekapselt
+- Module kommunizieren ausschließlich über definierte Schnittstellen
 
 ---
 
-# Architektur
+# Gesamtübersicht
 
+```text
 main.py
-
-↓
-
+    │
+    ▼
 OptionAgent
-
-↓
-
+    │
+    ▼
 Planner
-
-↓
-
-Services
-
-- AI
-- Browser
-- Reports
-- Strategy
-- Market Data (geplant)
+    │
+    ├──────────────┐
+    ▼              ▼
+MarketData      Browser
+    │
+    ▼
+Analysis
+    │
+    ▼
+Reports
+```
 
 ---
 
 # Module
 
-## app/main.py
+## OptionAgent
 
-Startet den Agenten.
+Verantwortlich für:
 
-## app/agent.py
-
-Koordiniert den Programmablauf.
-
-## app/planner/
-
-Entscheidet, welche Schritte zur Lösung einer Aufgabe notwendig sind.
-
-## app/browser/
-
-Steuert den Browser mit Playwright.
-
-## app/ai/
-
-Kommunikation mit OpenAI.
-
-## app/reports/
-
-Erzeugt Reports.
-
-## app/strategy/
-
-Enthält später die Handelslogik.
+- Start des Systems
+- Initialisierung der Services
+- Koordination des Ablaufs
 
 ---
 
-# Entwicklungsprinzipien
+## Planner
 
-- Eine Klasse = eine Aufgabe.
-- Kleine, klar verständliche Methoden.
-- Vor jeder größeren Änderung Architektur überlegen.
-- Jede neue Funktion erhält mindestens einen Test.
-- Erst testen, dann Commit.
-- Erst Commit, dann Push.
+Verantwortlich für:
+
+- Zerlegen einer Benutzeranfrage
+- Erstellen eines Arbeitsplans
+- Aufruf der benötigten Services
+
+Der Planner enthält keine technische Logik.
+
+---
+
+## Browser
+
+Der Browser ist eine Infrastrukturkomponente.
+
+Er besteht aus:
+
+```text
+BrowserClient
+│
+├── TabManager
+├── BrowserInteraction
+├── CookieManager
+└── ScreenshotService
+```
+
+BrowserClient ist die einzige öffentliche Schnittstelle.
+
+---
+
+## MarketData
+
+MarketData sammelt Marktdaten aus unterschiedlichen Quellen.
+
+Die öffentliche API lautet:
+
+```python
+market_data.get_snapshot(symbol)
+```
+
+Intern werden spezialisierte Provider verwendet.
+
+Beispiele:
+
+- PriceProvider
+- EarningsProvider
+- OptionChainProvider
+- VolatilityProvider
+
+---
+
+## Analysis
+
+Analysis enthält die fachliche Intelligenz.
+
+Beispiele:
+
+- Earnings Analyzer
+- Covered Call Analyzer
+- Short Put Analyzer
+- Portfolio Analyzer
+
+Analysis entscheidet niemals, woher Daten stammen.
+
+---
+
+## Reports
+
+Reports erzeugen Ausgaben.
+
+Zum Beispiel:
+
+- Markdown
+- HTML
+- PDF
+
+---
+
+# Abhängigkeiten
+
+Erlaubt:
+
+```text
+Planner
+    ↓
+MarketData
+    ↓
+Analysis
+    ↓
+Reports
+```
+
+Nicht erlaubt:
+
+- Analysis kennt Browser
+- Reports kennen Browser
+- Planner kennt Implementierungsdetails eines Providers
+
+---
+
+# Architekturregel
+
+Neue Funktionen werden grundsätzlich in bestehende Verantwortungsbereiche eingeordnet.
+
+Neue Klassen entstehen nur dann, wenn eine neue Verantwortung entsteht.
