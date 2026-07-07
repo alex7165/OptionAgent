@@ -8,6 +8,14 @@ class AnalysisResult:
 
     @property
     def summary(self) -> str:
+        if self.snapshot.earnings is None:
+            return (
+                f"{self.symbol}: "
+                f"price {self.snapshot.quote.price} "
+                f"{self.snapshot.quote.currency}, "
+                "no earnings date available"
+            )
+
         return (
             f"{self.symbol}: "
             f"price {self.snapshot.quote.price} "
