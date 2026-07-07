@@ -1,3 +1,4 @@
+from app.marketdata.yahoo_provider import YahooPriceProvider
 from app.marketdata.dummy_earnings_provider import DummyEarningsProvider
 from datetime import date
 
@@ -70,3 +71,7 @@ def test_market_data_service_returns_earnings_event():
     assert snapshot.earnings.symbol == "NVDA"
     assert snapshot.earnings.timing == "after market close"
     assert snapshot.earnings.source == "dummy"
+
+def test_yahoo_price_provider_exists():
+    provider = YahooPriceProvider()
+    assert provider is not None
