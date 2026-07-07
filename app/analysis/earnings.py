@@ -9,5 +9,6 @@ class EarningsAnalyzer:
         snapshot = self.market_data.get_snapshot(symbol)
 
         return AnalysisResult(
-            summary=f"{snapshot.symbol}: price {snapshot.quote.price} {snapshot.quote.currency}"
-        )
+    symbol=snapshot.symbol,
+    summary=f"{snapshot.symbol}: price {snapshot.quote.price} {snapshot.quote.currency}",
+)
