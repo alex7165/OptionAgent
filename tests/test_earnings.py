@@ -27,3 +27,6 @@ def test_analyze_returns_market_price_summary():
     assert result.snapshot.earnings is not None
     assert result.snapshot.earnings.symbol == "NVDA"
     assert result.snapshot.earnings.source == "dummy"
+
+    assert result.snapshot.earnings.report_date.year == 2026
+    assert result.snapshot.earnings.timing == "after market close"
