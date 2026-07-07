@@ -4,15 +4,17 @@ from app.browser.browser import BrowserClient
 def test_browser_title():
     browser = BrowserClient(headless=True)
 
-    browser.start()
+    try:
+        browser.start()
+        browser.goto("https://openai.com")
 
-    browser.goto("https://openai.com")
+        title = browser.get_title()
 
-    title = browser.get_title()
+        assert len(title) > 0
 
-    browser.close()
+    finally:
+        browser.close()
 
-    assert len(title) > 0
 
 def test_browser_can_open_new_tab():
     browser = BrowserClient(headless=True)
@@ -29,6 +31,7 @@ def test_browser_can_open_new_tab():
 
     finally:
         browser.close()
+
 
 def test_browser_can_select_tab():
     browser = BrowserClient(headless=True)
@@ -55,6 +58,7 @@ def test_browser_can_select_tab():
     finally:
         browser.close()
 
+
 def test_browser_can_take_screenshot(tmp_path):
     browser = BrowserClient(headless=True)
 
@@ -70,3 +74,47 @@ def test_browser_can_take_screenshot(tmp_path):
 
     finally:
         browser.close()
+
+
+def test_browser_can_save_and_load_cookies(tmp_path):
+    cookie_path = tmp_path / "cookies.json"
+
+    browser = BrowserClient(headless=True)
+
+    try:
+        browser.start()
+        browser.goto("https://example.com")
+
+        browser.context.add_cookies([
+            {
+                "name": "test_cookie",
+                "value": "test_value",
+                "domain": "example.com",
+                "path": "/",
+            }
+        ])
+
+        result_path = browser.save_cookies(str(cookie_path))
+
+        assert result_path.exists()
+
+    finally:
+        browser.close()
+
+    second_browser = BrowserClient(headless=True)
+
+    try:
+        second_browser.start()
+        second_browser.load_cookies(str(cookie_path))
+        second_browser.goto("https://example.com")
+
+        cookies = second_browser.context.cookies()
+
+        assert any(
+            cookie["name"] == "test_cookie"
+            and cookie["value"] == "test_value"
+            for cookie in cookies
+        )
+
+    finally:
+        second_browser.close()

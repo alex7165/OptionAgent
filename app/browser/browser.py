@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -9,23 +10,29 @@ class BrowserClient:
         self.headless = headless
         self.playwright = None
         self.browser = None
+        self.context = None
         self.page = None
         self.pages = []
 
     def start(self):
         self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(headless=self.headless)
 
-        self.page = self.browser.new_page()
+        self.browser = self.playwright.chromium.launch(
+            headless=self.headless
+        )
+
+        self.context = self.browser.new_context()
+
+        self.page = self.context.new_page()
         self.pages = [self.page]
 
     def new_tab(self):
-        if self.browser is None:
+        if self.context is None:
             raise RuntimeError(
                 "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
             )
 
-        self.page = self.browser.new_page()
+        self.page = self.context.new_page()
         self.pages.append(self.page)
 
         return self.page
@@ -84,11 +91,48 @@ class BrowserClient:
         screenshot_path = Path(path)
         screenshot_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self.page.screenshot(path=str(screenshot_path), full_page=True)
+        self.page.screenshot(
+            path=str(screenshot_path),
+            full_page=True
+        )
 
         return screenshot_path
 
+    def save_cookies(self, path: str):
+        if self.context is None:
+            raise RuntimeError(
+                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
+            )
+
+        cookie_path = Path(path)
+        cookie_path.parent.mkdir(parents=True, exist_ok=True)
+
+        cookies = self.context.cookies()
+
+        with cookie_path.open("w", encoding="utf-8") as file:
+            json.dump(cookies, file, indent=2)
+
+        return cookie_path
+
+    def load_cookies(self, path: str):
+        if self.context is None:
+            raise RuntimeError(
+                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
+            )
+
+        cookie_path = Path(path)
+
+        with cookie_path.open("r", encoding="utf-8") as file:
+            cookies = json.load(file)
+
+        self.context.add_cookies(cookies)
+
+        return cookie_path
+
     def close(self):
+        if self.context:
+            self.context.close()
+
         if self.browser:
             self.browser.close()
 
