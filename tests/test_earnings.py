@@ -21,7 +21,7 @@ def test_analyze_returns_market_price_summary():
     result = analyzer.analyze("NVDA")
 
     assert result.symbol == "NVDA"
-    assert result.summary == "NVDA: price 100.0 USD"
+    assert result.summary == "NVDA: price 100.0 USD, earnings 2026-01-01, after market close"
     assert result.snapshot.quote.price == 100.0
 
     assert result.snapshot.earnings is not None
