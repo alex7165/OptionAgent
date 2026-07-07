@@ -2,5 +2,5 @@ from app.analysis.result import AnalysisResult
 
 
 class EarningsAnalyzer:
-    def analyze(self):
-        return AnalysisResult(summary="Not implemented")
+    def analyze(self, symbol: str):
+        return AnalysisResult(summary=f"Analysis for {symbol} not implemented")

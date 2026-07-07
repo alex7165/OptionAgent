@@ -8,6 +8,6 @@ def test_earnings_analyzer_can_be_created():
 
 def test_analyze_returns_placeholder():
     analyzer = EarningsAnalyzer()
-    result = analyzer.analyze()
+    result = analyzer.analyze("NVDA")
 
-    assert result.summary == "Not implemented"
+    assert result.summary == "Analysis for NVDA not implemented"
