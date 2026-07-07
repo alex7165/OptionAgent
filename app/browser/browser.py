@@ -1,4 +1,5 @@
-import json
+from app.browser.cookie_manager import CookieManager
+
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -15,6 +16,7 @@ class BrowserClient:
         self.browser = None
         self.context = None
         self.page = None
+        self.cookies = CookieManager(self._require_context)
 
         self.tab_manager = TabManager(
             self._require_context,
@@ -107,10 +109,7 @@ class BrowserClient:
         self.interaction.wait_for(selector)
 
     def save_cookies(self, path: str):
-        if self.context is None:
-            raise RuntimeError(
-                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
-            )
+        return self.cookies.save(path)
 
         cookie_path = Path(path)
         cookie_path.parent.mkdir(parents=True, exist_ok=True)
@@ -123,10 +122,7 @@ class BrowserClient:
         return cookie_path
 
     def load_cookies(self, path: str):
-        if self.context is None:
-            raise RuntimeError(
-                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
-            )
+        return self.cookies.load(path)
 
         cookie_path = Path(path)
 
