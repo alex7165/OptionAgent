@@ -8,11 +8,25 @@ class BrowserClient:
         self.playwright = None
         self.browser = None
         self.page = None
+        self.pages = []
 
     def start(self):
         self.playwright = sync_playwright().start()
         self.browser = self.playwright.chromium.launch(headless=self.headless)
+
         self.page = self.browser.new_page()
+        self.pages = [self.page]
+
+    def new_tab(self):
+        if self.browser is None:
+            raise RuntimeError(
+                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
+            )
+
+        self.page = self.browser.new_page()
+        self.pages.append(self.page)
+
+        return self.page
 
     def goto(self, url: str):
         if self.page is None:
