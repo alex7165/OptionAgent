@@ -8,16 +8,9 @@ class EarningsAnalyzer:
 
     def analyze(self, symbol: str):
         market_snapshot = self.market_data.get_snapshot(symbol)
-        earnings_event = market_snapshot.earnings
-
-        earnings_analysis = EarningsAnalysis(
-            has_earnings=earnings_event is not None,
-            report_date=earnings_event.report_date if earnings_event else None,
-            timing=earnings_event.timing if earnings_event else None,
-        )
 
         return AnalysisResult(
             symbol=market_snapshot.symbol,
             snapshot=market_snapshot,
-            earnings=earnings_analysis,
+            earnings=EarningsAnalysis.from_event(market_snapshot.earnings),
         )
