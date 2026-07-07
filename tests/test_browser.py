@@ -54,3 +54,19 @@ def test_browser_can_select_tab():
 
     finally:
         browser.close()
+
+def test_browser_can_take_screenshot(tmp_path):
+    browser = BrowserClient(headless=True)
+
+    try:
+        browser.start()
+        browser.goto("https://example.com")
+
+        screenshot_path = tmp_path / "example.png"
+        result_path = browser.screenshot(str(screenshot_path))
+
+        assert result_path.exists()
+        assert result_path.suffix == ".png"
+
+    finally:
+        browser.close()

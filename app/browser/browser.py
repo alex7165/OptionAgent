@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from playwright.sync_api import sync_playwright
 
 
@@ -72,6 +74,19 @@ class BrowserClient:
             )
 
         return self.page.locator("body").inner_text()
+
+    def screenshot(self, path: str):
+        if self.page is None:
+            raise RuntimeError(
+                "Browser wurde noch nicht gestartet. Erst browser.start() aufrufen."
+            )
+
+        screenshot_path = Path(path)
+        screenshot_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self.page.screenshot(path=str(screenshot_path), full_page=True)
+
+        return screenshot_path
 
     def close(self):
         if self.browser:
