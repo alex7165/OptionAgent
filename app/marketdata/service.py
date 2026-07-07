@@ -4,13 +4,19 @@ from app.marketdata.provider import PriceProvider
 
 class MarketDataService:
 
-    def __init__(self, price_provider: PriceProvider):
+    def __init__(self, price_provider: PriceProvider, earnings_provider=None):
         self.price_provider = price_provider
+        self.earnings_provider = earnings_provider
 
     def get_snapshot(self, symbol: str) -> MarketSnapshot:
         quote = self.price_provider.get_quote(symbol)
+        earnings = None
+
+        if self.earnings_provider is not None:
+            earnings = self.earnings_provider.get_earnings(symbol)
 
         return MarketSnapshot(
             symbol=symbol.upper(),
             quote=quote,
+            earnings=earnings,
         )
