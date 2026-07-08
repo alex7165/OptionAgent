@@ -56,6 +56,12 @@ class OptionQuote:
 
         return self.bid_ask_spread / self.mid
 
+@dataclass(slots=True)
+class ExpirationChain:
+    symbol: str
+    expiration: date
+    quotes: list[OptionQuote]
+
 @dataclass
 class OptionChain:
     symbol: str

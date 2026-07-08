@@ -4,6 +4,7 @@ from datetime import date
 
 import requests
 from app.marketdata.models import OptionQuote
+from app.marketdata.models import ExpirationChain, OptionQuote
 
 
 class OptionStratProvider:
@@ -91,6 +92,50 @@ class OptionStratProvider:
                 return chain
 
         return None
+
+    def get_expiration_chain(
+        self,
+        symbol: str,
+        expiration: date,
+    ) -> ExpirationChain | None:
+        chain = self.get_chain_for_expiration(symbol, expiration)
+
+        if chain is None:
+            return None
+
+        quotes: list[OptionQuote] = []
+
+        for strike_key, strike_data in chain["s"].items():
+            strike = float(strike_key)
+
+            for option_type, key in [
+                ("call", "c"),
+                ("put", "p"),
+            ]:
+                quote = strike_data.get(key)
+
+                if quote is None:
+                    continue
+
+                quotes.append(
+                    OptionQuote(
+                        symbol=symbol.upper(),
+                        expiration=expiration,
+                        strike=strike,
+                        option_type=option_type,
+                        bid=quote.get("b"),
+                        ask=quote.get("a"),
+                        last=quote.get("p"),
+                        volume=quote.get("v"),
+                        open_interest=quote.get("o"),
+                    )
+                )
+
+        return ExpirationChain(
+            symbol=symbol.upper(),
+            expiration=expiration,
+            quotes=quotes,
+        )
 
     def get_strikes_for_expiration(
         self,
