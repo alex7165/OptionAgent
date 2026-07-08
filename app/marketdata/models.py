@@ -35,6 +35,26 @@ class OptionQuote:
     volume: int | None = None
     open_interest: int | None = None
 
+    @property
+    def mid(self) -> float | None:
+        if self.bid is None or self.ask is None:
+            return None
+
+        return (self.bid + self.ask) / 2
+
+    @property
+    def bid_ask_spread(self) -> float | None:
+        if self.bid is None or self.ask is None:
+            return None
+
+        return self.ask - self.bid
+
+    @property
+    def bid_ask_spread_percent(self) -> float | None:
+        if self.mid in (None, 0):
+            return None
+
+        return self.bid_ask_spread / self.mid
 
 @dataclass
 class OptionChain:

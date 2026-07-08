@@ -8,6 +8,7 @@ from app.marketdata.models import (
     EarningsEvent,
     OptionChain,
     OptionContract,
+    OptionQuote,
 )
 from app.marketdata.service import MarketDataService
 
@@ -80,3 +81,20 @@ def test_yahoo_price_provider_exists():
 def test_finviz_earnings_calendar_provider_exists():
     provider = FinvizEarningsCalendarProvider()
     assert provider is not None
+
+def test_option_quote_calculates_spread():
+    quote = OptionQuote(
+        symbol="NVDA",
+        expiration=date(2026, 7, 10),
+        strike=200.0,
+        option_type="call",
+        bid=1.73,
+        ask=1.76,
+        last=1.47,
+        volume=74326,
+        open_interest=58760,
+    )
+
+    assert quote.mid == 1.745
+    assert quote.bid_ask_spread == 0.030000000000000027
+    assert round(quote.bid_ask_spread_percent, 4) == 0.0172
