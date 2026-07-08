@@ -78,3 +78,9 @@ class MarketSnapshot:
     earnings: EarningsEvent | None = None
     option_chain: OptionChain | None = None
     news: list[str] = field(default_factory=list)
+
+@dataclass(slots=True)
+class ExpirationChain:
+    symbol: str
+    expiration: date
+    quotes: list[OptionQuote]
