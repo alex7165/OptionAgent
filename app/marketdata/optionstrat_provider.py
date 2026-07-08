@@ -3,6 +3,7 @@ import zlib
 from datetime import date
 
 import requests
+from app.marketdata.models import OptionQuote
 
 
 class OptionStratProvider:
@@ -73,3 +74,68 @@ class OptionStratProvider:
             return None
 
         return min(valid_expirations)
+
+    def get_chain_for_expiration(
+        self,
+        symbol: str,
+        expiration: date,
+    ) -> dict | None:
+        data = self.get_option_chain(symbol)
+
+        expiration_code = expiration.strftime("%y%m%d")
+
+        chains = data["context"]["i"]["c"][symbol.upper()]
+
+        for chain in chains:
+            if chain["exp"] == expiration_code:
+                return chain
+
+        return None
+
+    def get_strikes_for_expiration(
+        self,
+        symbol: str,
+        expiration: date,
+    ) -> list[float]:
+        chain = self.get_chain_for_expiration(symbol, expiration)
+
+        if chain is None:
+            return []
+
+        return sorted(float(strike) for strike in chain["s"].keys())
+
+    def get_option_quote(
+        self,
+        symbol: str,
+        expiration: date,
+        strike: float,
+        option_type: str,
+    ) -> OptionQuote | None:
+        chain = self.get_chain_for_expiration(symbol, expiration)
+
+        if chain is None:
+            return None
+
+        strike_key = str(int(strike)) if strike.is_integer() else str(strike)
+        strike_data = chain["s"].get(strike_key)
+
+        if strike_data is None:
+            return None
+
+        key = "c" if option_type == "call" else "p"
+        quote = strike_data.get(key)
+
+        if quote is None:
+            return None
+
+        return OptionQuote(
+            symbol=symbol.upper(),
+            expiration=expiration,
+            strike=strike,
+            option_type=option_type,
+            bid=quote.get("b"),
+            ask=quote.get("a"),
+            last=quote.get("p"),
+            volume=quote.get("v"),
+            open_interest=quote.get("o"),
+        )

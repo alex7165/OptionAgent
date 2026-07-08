@@ -23,6 +23,18 @@ class OptionContract:
     volume: int | None = None
     open_interest: int | None = None
 
+@dataclass
+class OptionQuote:
+    symbol: str
+    expiration: date
+    strike: float
+    option_type: str
+    bid: float | None = None
+    ask: float | None = None
+    last: float | None = None
+    volume: int | None = None
+    open_interest: int | None = None
+
 
 @dataclass
 class OptionChain:
