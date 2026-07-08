@@ -47,3 +47,29 @@ class OptionStratProvider:
         day = int(expiration[4:6])
 
         return date(year, month, day)
+
+    def get_expiration_dates(self, symbol: str) -> list[date]:
+        expirations = self.get_expirations(symbol)
+
+        return [
+            self.parse_expiration(expiration)
+            for expiration in expirations
+        ]
+
+    def get_next_expiration_on_or_after(
+        self,
+        symbol: str,
+        target_date: date,
+    ) -> date | None:
+        expirations = self.get_expiration_dates(symbol)
+
+        valid_expirations = [
+            expiration
+            for expiration in expirations
+            if expiration >= target_date
+        ]
+
+        if not valid_expirations:
+            return None
+
+        return min(valid_expirations)
