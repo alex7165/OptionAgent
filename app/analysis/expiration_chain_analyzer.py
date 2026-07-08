@@ -64,3 +64,25 @@ class ExpirationChainAnalyzer:
                 return quote
 
         return None
+
+    def find_atm_straddle(
+        self,
+        chain: ExpirationChain,
+        underlying_price: float,
+    ) -> tuple[OptionQuote, OptionQuote] | None:
+        call = self.find_nearest_strike(
+            chain,
+            underlying_price,
+            "call",
+        )
+
+        put = self.find_nearest_strike(
+            chain,
+            underlying_price,
+            "put",
+        )
+
+        if call is None or put is None:
+            return None
+
+        return call, put

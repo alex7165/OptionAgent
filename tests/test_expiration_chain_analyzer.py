@@ -109,3 +109,41 @@ def test_expiration_chain_analyzer_finds_put_below():
     quote = analyzer.find_put_below(chain, 183)
 
     assert quote.strike == 180
+
+def test_expiration_chain_analyzer_finds_atm_straddle():
+    chain = ExpirationChain(
+        symbol="NVDA",
+        expiration=date(2026, 7, 10),
+        quotes=[
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=195,
+                option_type="call",
+            ),
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=195,
+                option_type="put",
+            ),
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=200,
+                option_type="call",
+            ),
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=200,
+                option_type="put",
+            ),
+        ],
+    )
+
+    analyzer = ExpirationChainAnalyzer()
+    call, put = analyzer.find_atm_straddle(chain, 198)
+
+    assert call.strike == 200
+    assert put.strike == 200
