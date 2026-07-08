@@ -14,10 +14,12 @@ class EarningsCrushAnalyzer:
 
         for event in events:
             snapshot = self.market_data.get_snapshot(event.symbol)
+            option_data = self.market_data.get_option_data(event.symbol)
 
             candidate = EarningsCrushCandidate(
                 earnings_event=event,
                 snapshot=snapshot,
+                option_data=option_data,
             )
 
             candidate = self.rules.evaluate(candidate)
