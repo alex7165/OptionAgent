@@ -18,3 +18,5 @@ def test_earnings_crush_candidate_can_be_created():
     assert candidate.option_data is None
     assert candidate.passed_rules == []
     assert candidate.failed_rules == []
+
+    expected_move: ExpectedMove | None = None
