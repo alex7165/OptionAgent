@@ -60,10 +60,15 @@ class EarningsCrushAnalyzer:
                 candidates.append(candidate)
                 continue
 
+            candidate.expected_move = expected_move
+
             selection = self.strike_selector.select_by_expected_move(
                 chain,
                 expected_move,
             )
+
+            candidate.strike_selection = selection
+            candidate.expected_move = expected_move
 
             candidate.option_data = selection.call
             candidate.liquidity = self.liquidity_analyzer.analyze(
