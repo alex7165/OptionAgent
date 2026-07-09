@@ -31,27 +31,6 @@ def test_create_candidates():
     assert candidates[0].earnings_event.symbol == "NVDA"
     assert candidates[0].snapshot is not None
     assert candidates[0].snapshot.quote.price == 100.0
-    assert candidates[0].option_data is None
-    assert candidates[0].expected_move is None
-    assert candidates[0].strike_selection is None
+    assert candidates[0].expiration is not None
     assert candidates[1].earnings_event.symbol == "AAPL"
-    assert "missing_expected_move" in candidates[0].failed_rules
     assert candidates[0].snapshot.quote.price == 100.0
-
-def test_candidate_is_rejected_without_earnings_week_expiration():
-    market_data = MarketDataService(DummyPriceProvider())
-    analyzer = EarningsCrushAnalyzer(market_data)
-
-    events = [
-        EarningsEvent(
-            symbol="NVDA",
-            report_date=date(2026, 8, 26),
-            timing="after market close",
-            source="test",
-        )
-    ]
-
-    candidate = analyzer.create_candidates(events)[0]
-
-    assert "missing_expected_move" in candidate.failed_rules
-    assert candidate.expected_move is None

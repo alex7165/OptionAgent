@@ -166,3 +166,37 @@ class BrowserClient:
             self.playwright = None
 
         self.page = None
+
+    def collect_json_requests(self, url: str) -> list[dict]:
+        page = self._require_page()
+        requests = []
+
+        def handle_request(request):
+            request_url = request.url
+
+            if "proxies/core-api" not in request_url:
+                return
+
+            requests.append(
+                {
+                    "url": request_url,
+                    "method": request.method,
+                    "headers": request.headers,
+                }
+            )
+
+        page.on("request", handle_request)
+        page.goto(url)
+        page.wait_for_timeout(8000)
+
+        return requests
+
+    def get_barchart_session(self) -> tuple[dict, list[dict]]:
+        page_url = "https://www.barchart.com/options/iv-rank-percentile/high?sector=stock"
+
+        requests = self.collect_json_requests(page_url)
+
+        return (
+            requests[0]["headers"],
+            self._require_context().cookies(),
+        )
