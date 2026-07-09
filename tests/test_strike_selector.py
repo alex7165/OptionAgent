@@ -3,7 +3,7 @@ from datetime import date
 from app.analysis.strike_selector import StrikeSelector
 from app.marketdata.models import ExpirationChain, OptionQuote
 from app.analysis.expected_move import ExpectedMove
-
+from app.analysis.strike_selection import StrikeSelection
 
 def test_select_by_percent():
     chain = ExpirationChain(
@@ -95,3 +95,23 @@ def test_select_by_expected_move():
 
     assert selection.put.strike == 190
     assert selection.call.strike == 210
+
+def test_strike_selection_is_complete():
+    selection = StrikeSelection(
+        put=OptionQuote(
+            symbol="NVDA",
+            expiration=date(2026, 7, 10),
+            strike=190,
+            option_type="put",
+        ),
+        call=OptionQuote(
+            symbol="NVDA",
+            expiration=date(2026, 7, 10),
+            strike=210,
+            option_type="call",
+        ),
+        put_target=193.5,
+        call_target=206.5,
+    )
+
+    assert selection.is_complete

@@ -5,7 +5,7 @@ from app.analysis.liquidity_rating import LiquidityRating
 from app.analysis.option_data import OptionData
 from app.marketdata.models import EarningsEvent, MarketSnapshot
 from app.analysis.strike_selection import StrikeSelection
-
+from datetime import date
 
 @dataclass
 class EarningsCrushCandidate:
@@ -17,3 +17,4 @@ class EarningsCrushCandidate:
     passed_rules: list[str] = field(default_factory=list)
     failed_rules: list[str] = field(default_factory=list)
     strike_selection: StrikeSelection | None = None
+    expiration: date | None = None

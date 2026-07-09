@@ -6,6 +6,7 @@ from app.analysis.liquidity_analyzer import LiquidityAnalyzer
 from app.analysis.strike_selector import StrikeSelector
 from app.marketdata.optionstrat_provider import OptionStratProvider
 from app.marketdata.service import MarketDataService
+from app.analysis.option_data import OptionData
 
 
 class EarningsCrushAnalyzer:
@@ -33,6 +34,7 @@ class EarningsCrushAnalyzer:
             candidate = EarningsCrushCandidate(
                 earnings_event=event,
                 snapshot=snapshot,
+                expiration=expiration,
             )
 
             if expiration is None:
@@ -69,10 +71,17 @@ class EarningsCrushAnalyzer:
 
             candidate.strike_selection = selection
             candidate.expected_move = expected_move
+            candidate.expiration = expiration
 
-            candidate.option_data = selection.call
+            candidate.option_data = OptionData(
+                chain=chain,
+                put=selection.put,
+                call=selection.call,
+                expected_move=expected_move,
+            )
+            
             candidate.liquidity = self.liquidity_analyzer.analyze(
-                selection.call
+                candidate.option_data
             )
 
             candidate = self.rules.evaluate(candidate)
