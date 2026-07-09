@@ -35,3 +35,20 @@ def test_create_candidates():
     assert candidates[1].earnings_event.symbol == "AAPL"
     assert "missing_earnings_week_expiration" in candidates[0].failed_rules
     assert candidates[0].snapshot.quote.price == 100.0
+
+def test_candidate_is_rejected_without_earnings_week_expiration():
+    market_data = MarketDataService(DummyPriceProvider())
+    analyzer = EarningsCrushAnalyzer(market_data)
+
+    events = [
+        EarningsEvent(
+            symbol="NVDA",
+            report_date=date(2026, 8, 26),
+            timing="after market close",
+            source="test",
+        )
+    ]
+
+    candidate = analyzer.create_candidates(events)[0]
+
+    assert "missing_earnings_week_expiration" in candidate.failed_rules
