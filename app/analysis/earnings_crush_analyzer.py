@@ -3,10 +3,11 @@ from app.analysis.earnings_crush_rules import EarningsCrushRules
 from app.analysis.expiration_selector import ExpirationSelector
 from app.analysis.expected_move_analyzer import ExpectedMoveAnalyzer
 from app.analysis.liquidity_analyzer import LiquidityAnalyzer
+from app.analysis.option_data import OptionData
 from app.analysis.strike_selector import StrikeSelector
+from app.marketdata.barchart_volatility_provider import BarchartVolatilityProvider
 from app.marketdata.optionstrat_provider import OptionStratProvider
 from app.marketdata.service import MarketDataService
-from app.analysis.option_data import OptionData
 
 
 class EarningsCrushAnalyzer:
@@ -14,6 +15,7 @@ class EarningsCrushAnalyzer:
     def __init__(self, market_data: MarketDataService):
         self.market_data = market_data
         self.option_provider = OptionStratProvider()
+        self.volatility_provider = BarchartVolatilityProvider(headless=False)
         self.expiration_selector = ExpirationSelector(self.option_provider)
         self.expected_move_analyzer = ExpectedMoveAnalyzer()
         self.strike_selector = StrikeSelector()
@@ -70,16 +72,16 @@ class EarningsCrushAnalyzer:
             )
 
             candidate.strike_selection = selection
-            candidate.expected_move = expected_move
-            candidate.expiration = expiration
 
             candidate.option_data = OptionData(
                 chain=chain,
                 put=selection.put,
                 call=selection.call,
                 expected_move=expected_move,
+                iv_rank=self.volatility_provider.get_iv_rank(event.symbol),
+                iv_percentile=self.volatility_provider.get_iv_percentile(event.symbol),
             )
-            
+
             candidate.liquidity = self.liquidity_analyzer.analyze(
                 candidate.option_data
             )
