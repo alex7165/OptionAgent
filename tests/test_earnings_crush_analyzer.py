@@ -33,5 +33,5 @@ def test_create_candidates():
     assert candidates[0].snapshot.quote.price == 100.0
     assert candidates[0].option_data is None
     assert candidates[1].earnings_event.symbol == "AAPL"
-    assert "has_market_snapshot" in candidates[0].passed_rules
+    assert "missing_earnings_week_expiration" in candidates[0].failed_rules
     assert candidates[0].snapshot.quote.price == 100.0
