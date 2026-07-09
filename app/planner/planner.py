@@ -1,4 +1,6 @@
+from app.analysis.trade_exporter import TradeExporter
 from datetime import date
+from pathlib import Path
 
 from app.ai.client import ask_agent
 from app.analysis.earnings import EarningsAnalyzer
@@ -82,12 +84,25 @@ class Planner:
         analyzer = EarningsCrushAnalyzer(self.market_data)
         candidates = analyzer.create_candidates(events)
 
+        export_dir = Path("exports")
+        export_dir.mkdir(exist_ok=True)
+
+        export_path = export_dir / f"earnings_crush_{date.today().isoformat()}.xlsx"
+
+        TradeExporter().export_excel(
+            candidates,
+            export_path
+        )
+
         lines = [
             f"{candidate.earnings_event.symbol}: "
             f"{candidate.snapshot.quote.price} "
             f"{candidate.snapshot.quote.currency}"
             for candidate in candidates
         ]
+
+        lines.append("")
+        lines.append(f"Excel-Export: {export_path}")
 
         return "\n".join(lines)
 
