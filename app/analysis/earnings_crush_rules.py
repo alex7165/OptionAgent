@@ -4,6 +4,8 @@ from app.analysis.earnings_crush_candidate import EarningsCrushCandidate
 class EarningsCrushRules:
 
     MAX_BID_ASK_SPREAD = 0.10
+    MIN_OPEN_INTEREST = 500
+    MIN_VOLUME = 50
 
     def evaluate(
         self,
@@ -43,7 +45,27 @@ class EarningsCrushRules:
         elif (
             call_spread <= self.MAX_BID_ASK_SPREAD
             and put_spread <= self.MAX_BID_ASK_SPREAD
-            ):
+        ):
             candidate.passed_rules.append("bid_ask_spread_ok")
         else:
             candidate.failed_rules.append("bid_ask_spread_too_wide")
+
+        if candidate.liquidity is None:
+            candidate.failed_rules.append("missing_liquidity")
+            return candidate
+
+        if candidate.liquidity.open_interest is None:
+            candidate.failed_rules.append("missing_open_interest")
+        elif candidate.liquidity.open_interest >= self.MIN_OPEN_INTEREST:
+            candidate.passed_rules.append("open_interest_ok")
+        else:
+            candidate.failed_rules.append("open_interest_too_low")
+
+        if candidate.liquidity.volume is None:
+            candidate.failed_rules.append("missing_volume")
+        elif candidate.liquidity.volume >= self.MIN_VOLUME:
+            candidate.passed_rules.append("volume_ok")
+        else:
+            candidate.failed_rules.append("volume_too_low")
+
+        return candidate

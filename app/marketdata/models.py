@@ -37,7 +37,10 @@ class OptionQuote:
 
     @property
     def mid(self) -> float | None:
-        if self.bid is None or self.ask is None:
+        if not isinstance(self.bid, int | float):
+            return None
+
+        if not isinstance(self.ask, int | float):
             return None
 
         return (self.bid + self.ask) / 2

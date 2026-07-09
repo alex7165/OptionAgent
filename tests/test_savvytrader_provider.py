@@ -1,9 +1,11 @@
 from datetime import date
+import pytest
 
 from app.marketdata.savvytrader_earnings_calendar_provider import (
     SavvyTraderEarningsCalendarProvider,
 )
 
+@pytest.mark.integration
 
 def test_savvytrader_returns_events():
     provider = SavvyTraderEarningsCalendarProvider()

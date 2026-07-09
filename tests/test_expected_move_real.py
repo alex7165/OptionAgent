@@ -2,7 +2,9 @@ from datetime import date
 
 from app.analysis.expected_move_analyzer import ExpectedMoveAnalyzer
 from app.marketdata.optionstrat_provider import OptionStratProvider
+import pytest
 
+pytest.mark.integration
 
 def test_expected_move_from_real_option_chain():
     provider = OptionStratProvider()

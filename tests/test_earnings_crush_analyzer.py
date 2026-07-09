@@ -35,7 +35,7 @@ def test_create_candidates():
     assert candidates[0].expected_move is None
     assert candidates[0].strike_selection is None
     assert candidates[1].earnings_event.symbol == "AAPL"
-    assert "missing_earnings_week_expiration" in candidates[0].failed_rules
+    assert "missing_expected_move" in candidates[0].failed_rules
     assert candidates[0].snapshot.quote.price == 100.0
 
 def test_candidate_is_rejected_without_earnings_week_expiration():
@@ -53,5 +53,5 @@ def test_candidate_is_rejected_without_earnings_week_expiration():
 
     candidate = analyzer.create_candidates(events)[0]
 
-    assert "missing_earnings_week_expiration" in candidate.failed_rules
+    assert "missing_expected_move" in candidate.failed_rules
     assert candidate.expected_move is None
