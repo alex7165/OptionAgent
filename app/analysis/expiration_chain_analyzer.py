@@ -5,21 +5,13 @@ class ExpirationChainAnalyzer:
 
     def get_calls(self, chain: ExpirationChain) -> list[OptionQuote]:
         return sorted(
-            (
-                quote
-                for quote in chain.quotes
-                if quote.option_type == "call"
-            ),
+            (quote for quote in chain.quotes if quote.option_type == "call"),
             key=lambda quote: quote.strike,
         )
 
     def get_puts(self, chain: ExpirationChain) -> list[OptionQuote]:
         return sorted(
-            (
-                quote
-                for quote in chain.quotes
-                if quote.option_type == "put"
-            ),
+            (quote for quote in chain.quotes if quote.option_type == "put"),
             key=lambda quote: quote.strike,
         )
 
@@ -30,9 +22,7 @@ class ExpirationChainAnalyzer:
         option_type: str,
     ) -> OptionQuote | None:
         quotes = (
-            self.get_calls(chain)
-            if option_type == "call"
-            else self.get_puts(chain)
+            self.get_calls(chain) if option_type == "call" else self.get_puts(chain)
         )
 
         if not quotes:
@@ -61,6 +51,28 @@ class ExpirationChainAnalyzer:
     ) -> OptionQuote | None:
         for quote in reversed(self.get_puts(chain)):
             if quote.strike <= strike:
+                return quote
+
+        return None
+
+    def find_put_below_short_put(
+        self,
+        chain: ExpirationChain,
+        short_put: OptionQuote,
+    ) -> OptionQuote | None:
+        for quote in reversed(self.get_puts(chain)):
+            if quote.strike < short_put.strike:
+                return quote
+
+        return None
+
+    def find_call_above_short_call(
+        self,
+        chain: ExpirationChain,
+        short_call: OptionQuote,
+    ) -> OptionQuote | None:
+        for quote in self.get_calls(chain):
+            if quote.strike > short_call.strike:
                 return quote
 
         return None

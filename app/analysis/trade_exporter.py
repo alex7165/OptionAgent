@@ -28,30 +28,43 @@ class TradeExporter:
                 continue
 
             price = candidate.snapshot.quote.price
+            selection = candidate.strike_selection
 
             rows.append(
                 TradeExportRow(
                     aktie=candidate.earnings_event.symbol,
                     kurs=price,
                     strategie="Short Strangle",
-                    short_put_prozent=(
-                        (candidate.strike_selection.put.strike / price - 1) * 100
+                    short_put_prozent=(selection.put.strike / price - 1) * 100,
+                    long_put_prozent=(
+                        (selection.long_put.strike / price - 1) * 100
+                        if selection.long_put is not None
+                        else None
                     ),
-                    short_call_prozent=(
-                        (candidate.strike_selection.call.strike / price - 1) * 100
+                    short_call_prozent=(selection.call.strike / price - 1) * 100,
+                    long_call_prozent=(
+                        (selection.long_call.strike / price - 1) * 100
+                        if selection.long_call is not None
+                        else None
                     ),
-                    short_put_strike=candidate.strike_selection.put.strike,
-                    short_call_strike=candidate.strike_selection.call.strike,
+                    short_put_strike=selection.put.strike,
+                    long_put_strike=(
+                        selection.long_put.strike
+                        if selection.long_put is not None
+                        else None
+                    ),
+                    short_call_strike=selection.call.strike,
+                    long_call_strike=(
+                        selection.long_call.strike
+                        if selection.long_call is not None
+                        else None
+                    ),
                 )
             )
 
         return rows
 
-    def export_excel(
-        self,
-        candidates,
-        output_path: str | Path,
-    ) -> None:
+    def export_excel(self, candidates, output_path: str | Path) -> None:
         rows = self.export_rows(candidates)
         rows.sort(key=lambda row: row.aktie)
 

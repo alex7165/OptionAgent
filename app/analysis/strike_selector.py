@@ -1,13 +1,16 @@
 from app.analysis.expected_move import ExpectedMove
 from app.analysis.expiration_chain_analyzer import ExpirationChainAnalyzer
 from app.analysis.strike_selection import StrikeSelection
+from app.analysis.wing_selector import WingSelector
 from app.marketdata.models import ExpirationChain
 
 
 class StrikeSelector:
 
-    def __init__(self):
+    def __init__(self, wing_width: float = 5):
         self.chain_analyzer = ExpirationChainAnalyzer()
+        self.wing_selector = WingSelector()
+        self.wing_width = wing_width
 
     def select_by_percent(
         self,
@@ -51,9 +54,27 @@ class StrikeSelector:
             call_target,
         )
 
+        long_put = None
+        if put is not None:
+            long_put = self.wing_selector.select_long_put(
+                chain,
+                put,
+                self.wing_width,
+            )
+
+        long_call = None
+        if call is not None:
+            long_call = self.wing_selector.select_long_call(
+                chain,
+                call,
+                self.wing_width,
+            )
+
         return StrikeSelection(
             put=put,
             call=call,
             put_target=put_target,
             call_target=call_target,
+            long_put=long_put,
+            long_call=long_call,
         )

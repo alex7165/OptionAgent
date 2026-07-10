@@ -9,6 +9,8 @@ class StrikeSelection:
     call: OptionQuote | None
     put_target: float
     call_target: float
+    long_put: OptionQuote | None = None
+    long_call: OptionQuote | None = None
 
     @property
     def is_complete(self) -> bool:
