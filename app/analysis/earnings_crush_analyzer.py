@@ -8,6 +8,7 @@ from app.analysis.strike_selector import StrikeSelector
 from app.marketdata.barchart_volatility_provider import BarchartVolatilityProvider
 from app.marketdata.optionstrat_provider import OptionStratProvider
 from app.marketdata.service import MarketDataService
+from app.analysis.strategy_selector import StrategySelector
 
 
 class EarningsCrushAnalyzer:
@@ -66,10 +67,19 @@ class EarningsCrushAnalyzer:
 
             candidate.expected_move = expected_move
 
+            strategy = self.strategy_selector.select(
+                defined_risk=True,
+        )
+            
+            strategy = self.strategy_selector.select(
+                defined_risk=True,
+        )
+
             selection = self.strike_selector.select_by_expected_move(
                 chain,
                 expected_move,
-            )
+                strategy=strategy,
+        )
 
             candidate.strike_selection = selection
 
