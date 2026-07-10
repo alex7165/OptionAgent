@@ -7,7 +7,7 @@ from app.marketdata.models import ExpirationChain
 
 class StrikeSelector:
 
-    def __init__(self, wing_width: float = 5):
+    def __init__(self, wing_width: float | None = None):
         self.chain_analyzer = ExpirationChainAnalyzer()
         self.wing_selector = WingSelector()
         self.wing_width = wing_width
@@ -22,9 +22,10 @@ class StrikeSelector:
         call_target = underlying_price * (1 + percent)
 
         return self._select_by_targets(
-            chain,
-            put_target,
-            call_target,
+            chain=chain,
+            put_target=put_target,
+            call_target=call_target,
+            underlying_price=underlying_price,
         )
 
     def select_by_expected_move(
@@ -32,10 +33,15 @@ class StrikeSelector:
         chain: ExpirationChain,
         expected_move: ExpectedMove,
     ) -> StrikeSelection:
+        underlying_price = (
+            expected_move.down_price + expected_move.up_price
+        ) / 2
+
         return self._select_by_targets(
-            chain,
-            expected_move.down_price,
-            expected_move.up_price,
+            chain=chain,
+            put_target=expected_move.down_price,
+            call_target=expected_move.up_price,
+            underlying_price=underlying_price,
         )
 
     def _select_by_targets(
@@ -43,6 +49,7 @@ class StrikeSelector:
         chain: ExpirationChain,
         put_target: float,
         call_target: float,
+        underlying_price: float,
     ) -> StrikeSelection:
         put = self.chain_analyzer.find_put_below(
             chain,
@@ -54,12 +61,19 @@ class StrikeSelector:
             call_target,
         )
 
+        width = self.wing_width
+
+        if width is None:
+            width = self.wing_selector.width_for_price(
+                underlying_price
+            )
+
         long_put = None
         if put is not None:
             long_put = self.wing_selector.select_long_put(
                 chain,
                 put,
-                self.wing_width,
+                width,
             )
 
         long_call = None
@@ -67,7 +81,7 @@ class StrikeSelector:
             long_call = self.wing_selector.select_long_call(
                 chain,
                 call,
-                self.wing_width,
+                width,
             )
 
         return StrikeSelection(

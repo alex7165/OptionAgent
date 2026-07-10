@@ -160,3 +160,48 @@ def test_select_by_percent_adds_long_legs():
     assert selection.long_put.strike == 165
     assert selection.call.strike == 215
     assert selection.long_call.strike == 220
+
+def test_select_by_percent_uses_automatic_wing_width():
+    chain = ExpirationChain(
+        symbol="NVDA",
+        expiration=date(2026, 7, 10),
+        quotes=[
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=160,
+                option_type="put",
+            ),
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=170,
+                option_type="put",
+            ),
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=215,
+                option_type="call",
+            ),
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=225,
+                option_type="call",
+            ),
+        ],
+    )
+
+    selector = StrikeSelector()
+
+    selection = selector.select_by_percent(
+        chain,
+        underlying_price=200,
+        percent=0.10,
+    )
+
+    assert selection.put.strike == 170
+    assert selection.long_put.strike == 160
+    assert selection.call.strike == 225
+    assert selection.long_call is None

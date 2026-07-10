@@ -30,11 +30,17 @@ class TradeExporter:
             price = candidate.snapshot.quote.price
             selection = candidate.strike_selection
 
+            strategy = (
+                "Iron Condor"
+                if selection.long_put is not None and selection.long_call is not None
+                else "Short Strangle"
+            )
+
             rows.append(
                 TradeExportRow(
                     aktie=candidate.earnings_event.symbol,
                     kurs=price,
-                    strategie="Short Strangle",
+                    strategie=strategy,
                     short_put_prozent=(selection.put.strike / price - 1) * 100,
                     long_put_prozent=(
                         (selection.long_put.strike / price - 1) * 100

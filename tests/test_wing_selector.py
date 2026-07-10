@@ -90,3 +90,11 @@ def test_select_long_call_by_width():
     )
 
     assert long_call.strike == 220
+
+def test_width_for_price():
+    selector = WingSelector()
+
+    assert selector.width_for_price(40) == 2.5
+    assert selector.width_for_price(100) == 5
+    assert selector.width_for_price(200) == 10
+    assert selector.width_for_price(400) == 20
