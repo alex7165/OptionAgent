@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from datetime import date
 
 import pytest
@@ -17,6 +18,23 @@ from app.marketdata.earnings_api_provider import (
     HistoricalEarningsReaction,
 )
 from app.marketdata.price_history_provider import DailyBar
+
+
+@dataclass
+class MappingReferencePriceResolver:
+    reference_prices: dict[date, float]
+    resolved_report_dates: list[date] = field(
+        default_factory=list
+    )
+
+    def resolve(
+        self,
+        price_series: HistoricalEarningsPriceSeries,
+    ) -> float:
+        report_date = price_series.earnings.report_date
+        self.resolved_report_dates.append(report_date)
+
+        return self.reference_prices[report_date]
 
 
 def make_earnings_reaction(
@@ -78,10 +96,12 @@ def test_analyzes_all_historical_earnings_price_series() -> None:
         low=96.0,
     )
 
-    reference_prices = {
-        date(2025, 10, 16): 100.0,
-        date(2026, 1, 20): 80.0,
-    }
+    resolver = MappingReferencePriceResolver(
+        reference_prices={
+            date(2025, 10, 16): 100.0,
+            date(2026, 1, 20): 80.0,
+        }
+    )
 
     result = make_analyzer().analyze(
         analysis=HistoricalEarningsAnalysis(
@@ -90,9 +110,7 @@ def test_analyzes_all_historical_earnings_price_series() -> None:
                 second_series,
             ),
         ),
-        reference_price_resolver=lambda series: reference_prices[
-            series.earnings.report_date
-        ],
+        reference_price_resolver=resolver,
     )
 
     assert len(result.price_analyses) == 2
@@ -118,7 +136,7 @@ def test_analyzes_all_historical_earnings_price_series() -> None:
     )
 
 
-def test_preserves_price_series_order() -> None:
+def test_uses_resolver_for_each_price_series_in_order() -> None:
     first_series = make_price_series(
         report_date=date(2025, 7, 17),
         first_trading_date=date(2025, 7, 18),
@@ -132,6 +150,13 @@ def test_preserves_price_series_order() -> None:
         low=92.0,
     )
 
+    resolver = MappingReferencePriceResolver(
+        reference_prices={
+            date(2025, 7, 17): 100.0,
+            date(2025, 10, 16): 100.0,
+        }
+    )
+
     result = make_analyzer().analyze(
         analysis=HistoricalEarningsAnalysis(
             price_series=(
@@ -139,8 +164,13 @@ def test_preserves_price_series_order() -> None:
                 second_series,
             ),
         ),
-        reference_price_resolver=lambda series: 100.0,
+        reference_price_resolver=resolver,
     )
+
+    assert resolver.resolved_report_dates == [
+        date(2025, 7, 17),
+        date(2025, 10, 16),
+    ]
 
     assert tuple(
         item.earnings.report_date
@@ -152,9 +182,14 @@ def test_preserves_price_series_order() -> None:
 
 
 def test_returns_empty_result_when_no_price_series_exist() -> None:
+    resolver = MappingReferencePriceResolver(
+        reference_prices={}
+    )
+
     result = make_analyzer().analyze(
         analysis=HistoricalEarningsAnalysis(),
-        reference_price_resolver=lambda series: 100.0,
+        reference_price_resolver=resolver,
     )
 
     assert result.price_analyses == ()
+    assert resolver.resolved_report_dates == []

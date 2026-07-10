@@ -1,13 +1,14 @@
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.analysis.historical_earnings_analysis import (
     HistoricalEarningsAnalysis,
-    HistoricalEarningsPriceSeries,
 )
 from app.analysis.historical_earnings_price_analyzer import (
     HistoricalEarningsPriceAnalysis,
     HistoricalEarningsPriceAnalyzer,
+)
+from app.analysis.reference_price_resolver import (
+    ReferencePriceResolver,
 )
 
 
@@ -27,15 +28,12 @@ class HistoricalEarningsAnalysisAnalyzer:
     def analyze(
         self,
         analysis: HistoricalEarningsAnalysis,
-        reference_price_resolver: Callable[
-            [HistoricalEarningsPriceSeries],
-            float,
-        ],
+        reference_price_resolver: ReferencePriceResolver,
     ) -> HistoricalEarningsAnalysisResult:
         price_analyses = tuple(
             self.price_analyzer.analyze(
                 price_series=price_series,
-                reference_price=reference_price_resolver(
+                reference_price=reference_price_resolver.resolve(
                     price_series
                 ),
             )
