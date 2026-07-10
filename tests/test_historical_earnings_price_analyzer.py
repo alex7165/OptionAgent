@@ -2,6 +2,7 @@ from datetime import date
 
 import pytest
 
+from app.analysis.daily_move_analyzer import DailyMoveAnalyzer
 from app.analysis.historical_earnings_analysis import (
     HistoricalEarningsPriceSeries,
 )
@@ -53,12 +54,17 @@ def make_price_series() -> HistoricalEarningsPriceSeries:
     )
 
 
+def make_analyzer() -> HistoricalEarningsPriceAnalyzer:
+    return HistoricalEarningsPriceAnalyzer(
+        price_series_analyzer=PriceSeriesAnalyzer(),
+        daily_move_analyzer=DailyMoveAnalyzer(),
+    )
+
+
 def test_analyzes_historical_earnings_price_series() -> None:
     price_series = make_price_series()
 
-    analysis = HistoricalEarningsPriceAnalyzer(
-        price_series_analyzer=PriceSeriesAnalyzer(),
-    ).analyze(
+    analysis = make_analyzer().analyze(
         price_series=price_series,
         reference_price=100.0,
     )
@@ -67,21 +73,75 @@ def test_analyzes_historical_earnings_price_series() -> None:
     assert analysis.price_analysis.reference_price == 100.0
     assert analysis.price_analysis.first_date == date(2026, 4, 17)
     assert analysis.price_analysis.last_date == date(2026, 4, 20)
-    assert analysis.price_analysis.max_gain_percent == pytest.approx(8.0)
-    assert analysis.price_analysis.max_loss_percent == pytest.approx(-8.0)
+    assert analysis.price_analysis.max_gain_percent == pytest.approx(
+        8.0
+    )
+    assert analysis.price_analysis.max_loss_percent == pytest.approx(
+        -8.0
+    )
 
 
-def test_passes_explicit_reference_price_to_price_series_analyzer() -> None:
-    analysis = HistoricalEarningsPriceAnalyzer(
-        price_series_analyzer=PriceSeriesAnalyzer(),
-    ).analyze(
+def test_calculates_daily_moves_for_complete_price_series() -> None:
+    analysis = make_analyzer().analyze(
+        price_series=make_price_series(),
+        reference_price=100.0,
+    )
+
+    assert len(analysis.daily_moves) == 2
+
+    first_move = analysis.daily_moves[0]
+    assert first_move.trading_day_index == 1
+    assert first_move.date == date(2026, 4, 17)
+    assert first_move.open_percent == pytest.approx(-4.0)
+    assert first_move.high_percent == pytest.approx(2.0)
+    assert first_move.low_percent == pytest.approx(-6.0)
+    assert first_move.close_percent == pytest.approx(0.0)
+
+    second_move = analysis.daily_moves[1]
+    assert second_move.trading_day_index == 2
+    assert second_move.date == date(2026, 4, 20)
+    assert second_move.open_percent == pytest.approx(0.0)
+    assert second_move.high_percent == pytest.approx(8.0)
+    assert second_move.low_percent == pytest.approx(-8.0)
+    assert second_move.close_percent == pytest.approx(-5.0)
+
+
+def test_passes_same_reference_price_to_both_analyses() -> None:
+    analysis = make_analyzer().analyze(
         price_series=make_price_series(),
         reference_price=80.0,
     )
 
     assert analysis.price_analysis.reference_price == 80.0
-    assert analysis.price_analysis.max_gain_percent == pytest.approx(35.0)
-    assert analysis.price_analysis.max_loss_percent == pytest.approx(15.0)
+    assert analysis.price_analysis.max_gain_percent == pytest.approx(
+        35.0
+    )
+    assert analysis.price_analysis.max_loss_percent == pytest.approx(
+        15.0
+    )
+
+    assert analysis.daily_moves[0].open_percent == pytest.approx(
+        20.0
+    )
+    assert analysis.daily_moves[1].high_percent == pytest.approx(
+        35.0
+    )
+    assert analysis.daily_moves[1].low_percent == pytest.approx(
+        15.0
+    )
+
+
+def test_uses_default_daily_move_analyzer() -> None:
+    analyzer = HistoricalEarningsPriceAnalyzer(
+        price_series_analyzer=PriceSeriesAnalyzer(),
+    )
+
+    analysis = analyzer.analyze(
+        price_series=make_price_series(),
+        reference_price=100.0,
+    )
+
+    assert len(analysis.daily_moves) == 2
 
 
 def test_rejects_empty_price_series() -> None:
@@ -94,9 +154,7 @@ def test_rejects_empty_price_series() -> None:
         ValueError,
         match="daily_bars must not be empty",
     ):
-        HistoricalEarningsPriceAnalyzer(
-            price_series_analyzer=PriceSeriesAnalyzer(),
-        ).analyze(
+        make_analyzer().analyze(
             price_series=price_series,
             reference_price=100.0,
         )
