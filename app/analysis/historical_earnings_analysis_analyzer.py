@@ -7,6 +7,10 @@ from app.analysis.historical_earnings_price_analyzer import (
     HistoricalEarningsPriceAnalysis,
     HistoricalEarningsPriceAnalyzer,
 )
+from app.analysis.historical_price_statistics_analyzer import (
+    HistoricalPriceStatistics,
+    HistoricalPriceStatisticsAnalyzer,
+)
 from app.analysis.reference_price_resolver import (
     ReferencePriceResolver,
 )
@@ -15,6 +19,7 @@ from app.analysis.reference_price_resolver import (
 @dataclass(frozen=True, slots=True)
 class HistoricalEarningsAnalysisResult:
     price_analyses: tuple[HistoricalEarningsPriceAnalysis, ...]
+    statistics: HistoricalPriceStatistics
 
 
 class HistoricalEarningsAnalysisAnalyzer:
@@ -22,8 +27,10 @@ class HistoricalEarningsAnalysisAnalyzer:
     def __init__(
         self,
         price_analyzer: HistoricalEarningsPriceAnalyzer,
+        statistics_analyzer: HistoricalPriceStatisticsAnalyzer,
     ) -> None:
         self.price_analyzer = price_analyzer
+        self.statistics_analyzer = statistics_analyzer
 
     def analyze(
         self,
@@ -40,6 +47,11 @@ class HistoricalEarningsAnalysisAnalyzer:
             for price_series in analysis.price_series
         )
 
+        statistics = self.statistics_analyzer.analyze(
+            price_analyses
+        )
+
         return HistoricalEarningsAnalysisResult(
             price_analyses=price_analyses,
+            statistics=statistics,
         )

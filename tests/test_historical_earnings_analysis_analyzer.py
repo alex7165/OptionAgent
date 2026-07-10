@@ -13,6 +13,9 @@ from app.analysis.historical_earnings_analysis_analyzer import (
 from app.analysis.historical_earnings_price_analyzer import (
     HistoricalEarningsPriceAnalyzer,
 )
+from app.analysis.historical_price_statistics_analyzer import (
+    HistoricalPriceStatisticsAnalyzer,
+)
 from app.analysis.price_series_analyzer import PriceSeriesAnalyzer
 from app.marketdata.earnings_api_provider import (
     HistoricalEarningsReaction,
@@ -79,6 +82,7 @@ def make_analyzer() -> HistoricalEarningsAnalysisAnalyzer:
         price_analyzer=HistoricalEarningsPriceAnalyzer(
             price_series_analyzer=PriceSeriesAnalyzer(),
         ),
+        statistics_analyzer=HistoricalPriceStatisticsAnalyzer(),
     )
 
 
@@ -133,6 +137,64 @@ def test_analyzes_all_historical_earnings_price_series() -> None:
     )
     assert second_analysis.price_analysis.max_loss_percent == pytest.approx(
         20.0
+    )
+
+
+def test_calculates_statistics_for_all_price_analyses() -> None:
+    first_series = make_price_series(
+        report_date=date(2025, 10, 16),
+        first_trading_date=date(2025, 10, 17),
+        high=110.0,
+        low=90.0,
+    )
+    second_series = make_price_series(
+        report_date=date(2026, 1, 20),
+        first_trading_date=date(2026, 1, 21),
+        high=120.0,
+        low=80.0,
+    )
+
+    resolver = MappingReferencePriceResolver(
+        reference_prices={
+            date(2025, 10, 16): 100.0,
+            date(2026, 1, 20): 100.0,
+        }
+    )
+
+    result = make_analyzer().analyze(
+        analysis=HistoricalEarningsAnalysis(
+            price_series=(
+                first_series,
+                second_series,
+            ),
+        ),
+        reference_price_resolver=resolver,
+    )
+
+    assert result.statistics.earnings_count == 2
+    assert (
+        result.statistics.average_max_gain_percent
+        == pytest.approx(15.0)
+    )
+    assert (
+        result.statistics.average_max_loss_percent
+        == pytest.approx(-15.0)
+    )
+    assert (
+        result.statistics.highest_max_gain_percent
+        == pytest.approx(20.0)
+    )
+    assert (
+        result.statistics.worst_max_loss_percent
+        == pytest.approx(-20.0)
+    )
+    assert (
+        result.statistics.median_max_gain_percent
+        == pytest.approx(15.0)
+    )
+    assert (
+        result.statistics.median_max_loss_percent
+        == pytest.approx(-15.0)
     )
 
 
@@ -192,4 +254,11 @@ def test_returns_empty_result_when_no_price_series_exist() -> None:
     )
 
     assert result.price_analyses == ()
+    assert result.statistics.earnings_count == 0
+    assert result.statistics.average_max_gain_percent is None
+    assert result.statistics.average_max_loss_percent is None
+    assert result.statistics.highest_max_gain_percent is None
+    assert result.statistics.worst_max_loss_percent is None
+    assert result.statistics.median_max_gain_percent is None
+    assert result.statistics.median_max_loss_percent is None
     assert resolver.resolved_report_dates == []
