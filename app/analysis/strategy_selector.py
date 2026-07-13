@@ -8,6 +8,7 @@ from app.analysis.historical_strike_selector import (
 from app.analysis.historical_strategy_selector_adapter import (
     HistoricalStrategySelectorAdapter,
 )
+from app.analysis.liquidity_optimizer import LiquidityOptimizer
 from app.analysis.strategy import Strategy
 from app.analysis.strike_selection import StrikeSelection
 from app.analysis.strike_selector import StrikeSelector
@@ -22,9 +23,13 @@ class StrategySelector:
         historical_adapter: (
             HistoricalStrategySelectorAdapter | None
         ) = None,
+        liquidity_optimizer: LiquidityOptimizer | None = None,
     ) -> None:
         self.strike_selector = strike_selector or StrikeSelector()
         self.historical_adapter = historical_adapter
+        self.liquidity_optimizer = (
+            liquidity_optimizer or LiquidityOptimizer()
+        )
 
     def select(
         self,
@@ -51,10 +56,15 @@ class StrategySelector:
         policy: HistoricalStrikeSelectionPolicy | None = None,
     ) -> StrikeSelection:
         if self.historical_adapter is None:
-            return self.strike_selector.select_by_expected_move(
+            selection = self.strike_selector.select_by_expected_move(
                 chain=chain,
                 expected_move=expected_move,
                 strategy=strategy,
+            )
+            return self.liquidity_optimizer.optimize(
+                selection=selection,
+                chain=chain,
+                underlying_price=underlying_price,
             )
 
         if price_analyses is None:
@@ -95,4 +105,8 @@ class StrategySelector:
             strategy=strategy,
         )
 
-        return result.adjusted_selection.strike_selection
+        return self.liquidity_optimizer.optimize(
+            selection=result.adjusted_selection.strike_selection,
+            chain=chain,
+            underlying_price=underlying_price,
+        )
