@@ -205,3 +205,49 @@ def test_select_by_percent_uses_automatic_wing_width():
     assert selection.long_put.strike == 160
     assert selection.call.strike == 225
     assert selection.long_call is None
+
+def test_select_by_asymmetric_percent():
+    chain = ExpirationChain(
+        symbol="NVDA",
+        expiration=date(2026, 7, 10),
+        quotes=[
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=165,
+                option_type="put",
+            ),
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=170,
+                option_type="put",
+            ),
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=220,
+                option_type="call",
+            ),
+            OptionQuote(
+                symbol="NVDA",
+                expiration=date(2026, 7, 10),
+                strike=225,
+                option_type="call",
+            ),
+        ],
+    )
+
+    selection = StrikeSelector().select_by_asymmetric_percent(
+        chain=chain,
+        underlying_price=200,
+        put_percent=0.15,
+        call_percent=0.125,
+    )
+
+    assert selection.put_target == 170
+    assert selection.call_target == 225
+    assert selection.put is not None
+    assert selection.put.strike == 170
+    assert selection.call is not None
+    assert selection.call.strike == 225

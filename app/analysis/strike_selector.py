@@ -1,5 +1,7 @@
 from app.analysis.expected_move import ExpectedMove
-from app.analysis.expiration_chain_analyzer import ExpirationChainAnalyzer
+from app.analysis.expiration_chain_analyzer import (
+    ExpirationChainAnalyzer,
+)
 from app.analysis.strategy import Strategy
 from app.analysis.strike_selection import StrikeSelection
 from app.analysis.wing_selector import WingSelector
@@ -8,7 +10,10 @@ from app.marketdata.models import ExpirationChain
 
 class StrikeSelector:
 
-    def __init__(self, wing_width: float | None = None):
+    def __init__(
+        self,
+        wing_width: float | None = None,
+    ) -> None:
         self.chain_analyzer = ExpirationChainAnalyzer()
         self.wing_selector = WingSelector()
         self.wing_width = wing_width
@@ -20,8 +25,42 @@ class StrikeSelector:
         percent: float,
         strategy: Strategy = Strategy.IRON_CONDOR,
     ) -> StrikeSelection:
-        put_target = underlying_price * (1 - percent)
-        call_target = underlying_price * (1 + percent)
+        return self.select_by_asymmetric_percent(
+            chain=chain,
+            underlying_price=underlying_price,
+            put_percent=percent,
+            call_percent=percent,
+            strategy=strategy,
+        )
+
+    def select_by_asymmetric_percent(
+        self,
+        chain: ExpirationChain,
+        underlying_price: float,
+        put_percent: float,
+        call_percent: float,
+        strategy: Strategy = Strategy.IRON_CONDOR,
+    ) -> StrikeSelection:
+        if underlying_price <= 0:
+            raise ValueError(
+                "underlying_price must be greater than zero"
+            )
+
+        if put_percent < 0:
+            raise ValueError(
+                "put_percent must not be negative"
+            )
+
+        if call_percent < 0:
+            raise ValueError(
+                "call_percent must not be negative"
+            )
+
+        put_distance = underlying_price * put_percent
+        call_distance = underlying_price * call_percent
+
+        put_target = underlying_price - put_distance
+        call_target = underlying_price + call_distance
 
         return self._select_by_targets(
             chain=chain,
@@ -38,7 +77,8 @@ class StrikeSelector:
         strategy: Strategy = Strategy.IRON_CONDOR,
     ) -> StrikeSelection:
         underlying_price = (
-            expected_move.down_price + expected_move.up_price
+            expected_move.down_price
+            + expected_move.up_price
         ) / 2
 
         return self._select_by_targets(
