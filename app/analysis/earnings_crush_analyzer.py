@@ -1,15 +1,10 @@
-from dataclasses import dataclass
-from typing import Protocol
-
 from app.analysis.earnings_crush_candidate import EarningsCrushCandidate
 from app.analysis.earnings_crush_rules import EarningsCrushRules
 from app.analysis.expiration_selector import ExpirationSelector
 from app.analysis.expected_move_analyzer import ExpectedMoveAnalyzer
-from app.analysis.historical_earnings_price_analyzer import (
-    HistoricalEarningsPriceAnalysis,
-)
-from app.analysis.historical_strike_selector import (
-    HistoricalStrikeSelectionPolicy,
+from app.analysis.historical_strategy_selection_inputs import (
+    HistoricalStrategySelectionInputs,
+    HistoricalStrategySelectionInputsLoaderProtocol,
 )
 from app.analysis.liquidity_analyzer import LiquidityAnalyzer
 from app.analysis.option_data import OptionData
@@ -21,24 +16,6 @@ from app.marketdata.optionstrat_provider import OptionStratProvider
 from app.marketdata.service import MarketDataService
 
 
-@dataclass(frozen=True, slots=True)
-class HistoricalStrategySelectionInputs:
-    price_analyses: tuple[HistoricalEarningsPriceAnalysis, ...]
-    exit_trading_day_index: int
-    call_thresholds: tuple[float, ...]
-    put_thresholds: tuple[float, ...]
-    policy: HistoricalStrikeSelectionPolicy
-
-
-class HistoricalStrategySelectionInputsLoader(Protocol):
-
-    def load(
-        self,
-        symbol: str,
-    ) -> HistoricalStrategySelectionInputs | None:
-        ...
-
-
 class EarningsCrushAnalyzer:
 
     def __init__(
@@ -46,7 +23,7 @@ class EarningsCrushAnalyzer:
         market_data: MarketDataService,
         strategy_selector: StrategySelector | None = None,
         historical_inputs_loader: (
-            HistoricalStrategySelectionInputsLoader | None
+            HistoricalStrategySelectionInputsLoaderProtocol | None
         ) = None,
     ) -> None:
         self.market_data = market_data

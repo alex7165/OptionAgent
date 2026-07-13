@@ -4,7 +4,9 @@ from pathlib import Path
 
 from app.ai.client import ask_agent
 from app.analysis.earnings import EarningsAnalyzer
-from app.analysis.earnings_crush_analyzer import EarningsCrushAnalyzer
+from app.analysis.earnings_crush_analyzer_factory import (
+    EarningsCrushAnalyzerFactory,
+)
 from app.browser.browser import BrowserClient
 from app.planner.symbol_extractor import SymbolExtractor
 from app.reports.reporting import save_report
@@ -12,9 +14,17 @@ from app.reports.reporting import save_report
 
 class Planner:
 
-    def __init__(self, market_data=None):
+    def __init__(
+        self,
+        market_data=None,
+        earnings_crush_analyzer_factory=None,
+    ):
         self.market_data = market_data
         self.symbol_extractor = SymbolExtractor()
+        self.earnings_crush_analyzer_factory = (
+            earnings_crush_analyzer_factory
+            or EarningsCrushAnalyzerFactory()
+        )
 
     def execute(self, task: str) -> str:
         if self._is_url(task):
@@ -81,7 +91,9 @@ class Planner:
             date(2026, 7, 10),
         )
 
-        analyzer = EarningsCrushAnalyzer(self.market_data)
+        analyzer = self.earnings_crush_analyzer_factory.create(
+            self.market_data
+        )
         candidates = analyzer.create_candidates(events)
 
         export_dir = Path("exports")

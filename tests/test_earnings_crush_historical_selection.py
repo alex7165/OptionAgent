@@ -1,8 +1,8 @@
 from datetime import date
 from types import SimpleNamespace
 
-from app.analysis.earnings_crush_analyzer import (
-    EarningsCrushAnalyzer,
+from app.analysis.earnings_crush_analyzer import EarningsCrushAnalyzer
+from app.analysis.historical_strategy_selection_inputs import (
     HistoricalStrategySelectionInputs,
 )
 from app.analysis.expected_move import ExpectedMove
