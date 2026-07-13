@@ -1,25 +1,65 @@
+from dataclasses import dataclass
+from typing import Protocol
+
 from app.analysis.earnings_crush_candidate import EarningsCrushCandidate
 from app.analysis.earnings_crush_rules import EarningsCrushRules
 from app.analysis.expiration_selector import ExpirationSelector
 from app.analysis.expected_move_analyzer import ExpectedMoveAnalyzer
+from app.analysis.historical_earnings_price_analyzer import (
+    HistoricalEarningsPriceAnalysis,
+)
+from app.analysis.historical_strike_selector import (
+    HistoricalStrikeSelectionPolicy,
+)
 from app.analysis.liquidity_analyzer import LiquidityAnalyzer
 from app.analysis.option_data import OptionData
-from app.analysis.strike_selector import StrikeSelector
-from app.marketdata.barchart_volatility_provider import BarchartVolatilityProvider
+from app.analysis.strategy_selector import StrategySelector
+from app.marketdata.barchart_volatility_provider import (
+    BarchartVolatilityProvider,
+)
 from app.marketdata.optionstrat_provider import OptionStratProvider
 from app.marketdata.service import MarketDataService
-from app.analysis.strategy_selector import StrategySelector
+
+
+@dataclass(frozen=True, slots=True)
+class HistoricalStrategySelectionInputs:
+    price_analyses: tuple[HistoricalEarningsPriceAnalysis, ...]
+    exit_trading_day_index: int
+    call_thresholds: tuple[float, ...]
+    put_thresholds: tuple[float, ...]
+    policy: HistoricalStrikeSelectionPolicy
+
+
+class HistoricalStrategySelectionInputsLoader(Protocol):
+
+    def load(
+        self,
+        symbol: str,
+    ) -> HistoricalStrategySelectionInputs | None:
+        ...
 
 
 class EarningsCrushAnalyzer:
 
-    def __init__(self, market_data: MarketDataService):
+    def __init__(
+        self,
+        market_data: MarketDataService,
+        strategy_selector: StrategySelector | None = None,
+        historical_inputs_loader: (
+            HistoricalStrategySelectionInputsLoader | None
+        ) = None,
+    ) -> None:
         self.market_data = market_data
         self.option_provider = OptionStratProvider()
-        self.volatility_provider = BarchartVolatilityProvider(headless=False)
-        self.expiration_selector = ExpirationSelector(self.option_provider)
+        self.volatility_provider = BarchartVolatilityProvider(
+            headless=False
+        )
+        self.expiration_selector = ExpirationSelector(
+            self.option_provider
+        )
         self.expected_move_analyzer = ExpectedMoveAnalyzer()
-        self.strike_selector = StrikeSelector()
+        self.strategy_selector = strategy_selector or StrategySelector()
+        self.historical_inputs_loader = historical_inputs_loader
         self.liquidity_analyzer = LiquidityAnalyzer()
         self.rules = EarningsCrushRules()
 
@@ -29,9 +69,12 @@ class EarningsCrushAnalyzer:
         for event in events:
             snapshot = self.market_data.get_snapshot(event.symbol)
 
-            expiration = self.expiration_selector.select_earnings_week_expiration(
-                event.symbol,
-                event.report_date,
+            expiration = (
+                self.expiration_selector
+                .select_earnings_week_expiration(
+                    event.symbol,
+                    event.report_date,
+                )
             )
 
             candidate = EarningsCrushCandidate(
@@ -41,7 +84,9 @@ class EarningsCrushAnalyzer:
             )
 
             if expiration is None:
-                candidate.failed_rules.append("missing_earnings_week_expiration")
+                candidate.failed_rules.append(
+                    "missing_earnings_week_expiration"
+                )
                 candidates.append(candidate)
                 continue
 
@@ -51,17 +96,23 @@ class EarningsCrushAnalyzer:
             )
 
             if chain is None:
-                candidate.failed_rules.append("missing_expiration_chain")
+                candidate.failed_rules.append(
+                    "missing_expiration_chain"
+                )
                 candidates.append(candidate)
                 continue
 
-            expected_move = self.expected_move_analyzer.from_atm_straddle(
-                chain,
-                snapshot.quote.price,
+            expected_move = (
+                self.expected_move_analyzer.from_atm_straddle(
+                    chain,
+                    snapshot.quote.price,
+                )
             )
 
             if expected_move is None:
-                candidate.failed_rules.append("missing_expected_move")
+                candidate.failed_rules.append(
+                    "missing_expected_move"
+                )
                 candidates.append(candidate)
                 continue
 
@@ -69,17 +120,39 @@ class EarningsCrushAnalyzer:
 
             strategy = self.strategy_selector.select(
                 defined_risk=True,
-        )
-            
-            strategy = self.strategy_selector.select(
-                defined_risk=True,
-        )
+            )
 
-            selection = self.strike_selector.select_by_expected_move(
-                chain,
-                expected_move,
-                strategy=strategy,
-        )
+            historical_inputs = self._load_historical_inputs(
+                event.symbol
+            )
+
+            if historical_inputs is None:
+                selection = self.strategy_selector.select_strikes(
+                    chain=chain,
+                    underlying_price=snapshot.quote.price,
+                    expected_move=expected_move,
+                    strategy=strategy,
+                )
+            else:
+                selection = self.strategy_selector.select_strikes(
+                    chain=chain,
+                    underlying_price=snapshot.quote.price,
+                    expected_move=expected_move,
+                    strategy=strategy,
+                    price_analyses=(
+                        historical_inputs.price_analyses
+                    ),
+                    exit_trading_day_index=(
+                        historical_inputs.exit_trading_day_index
+                    ),
+                    call_thresholds=(
+                        historical_inputs.call_thresholds
+                    ),
+                    put_thresholds=(
+                        historical_inputs.put_thresholds
+                    ),
+                    policy=historical_inputs.policy,
+                )
 
             candidate.strike_selection = selection
 
@@ -88,8 +161,14 @@ class EarningsCrushAnalyzer:
                 put=selection.put,
                 call=selection.call,
                 expected_move=expected_move,
-                iv_rank=self.volatility_provider.get_iv_rank(event.symbol),
-                iv_percentile=self.volatility_provider.get_iv_percentile(event.symbol),
+                iv_rank=self.volatility_provider.get_iv_rank(
+                    event.symbol
+                ),
+                iv_percentile=(
+                    self.volatility_provider.get_iv_percentile(
+                        event.symbol
+                    )
+                ),
             )
 
             candidate.liquidity = self.liquidity_analyzer.analyze(
@@ -100,3 +179,12 @@ class EarningsCrushAnalyzer:
             candidates.append(candidate)
 
         return candidates
+
+    def _load_historical_inputs(
+        self,
+        symbol: str,
+    ) -> HistoricalStrategySelectionInputs | None:
+        if self.historical_inputs_loader is None:
+            return None
+
+        return self.historical_inputs_loader.load(symbol)
