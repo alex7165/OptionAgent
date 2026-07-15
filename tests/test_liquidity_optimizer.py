@@ -146,7 +146,7 @@ def test_keeps_current_strike_when_outward_improvement_is_small():
     assert result.call is call_146
 
 
-def test_only_checks_one_outward_listed_strike():
+def test_checks_two_outward_listed_strikes():
     call_146 = quote(146, "call", open_interest=600)
     call_147 = quote(147, "call", open_interest=500)
     call_148 = quote(148, "call", open_interest=20_000)
@@ -162,7 +162,46 @@ def test_only_checks_one_outward_listed_strike():
         chain,
     )
 
+    assert result.call is call_148
+
+
+def test_does_not_check_beyond_two_outward_listed_strikes():
+    call_146 = quote(146, "call", open_interest=600)
+    call_147 = quote(147, "call", open_interest=500)
+    call_148 = quote(148, "call", open_interest=500)
+    call_149 = quote(149, "call", open_interest=20_000)
+    put_132 = quote(132, "put")
+    chain = ExpirationChain(
+        symbol="C",
+        expiration=EXPIRATION,
+        quotes=[put_132, call_146, call_147, call_148, call_149],
+    )
+
+    result = LiquidityOptimizer().optimize(
+        selection(put_132, call_146),
+        chain,
+    )
+
     assert result.call is call_146
+
+
+def test_prefers_nearer_candidate_when_liquidity_is_identical():
+    call_146 = quote(146, "call", open_interest=100, volume=5)
+    call_147 = quote(147, "call", open_interest=2_000, volume=100)
+    call_148 = quote(148, "call", open_interest=2_000, volume=100)
+    put_132 = quote(132, "put")
+    chain = ExpirationChain(
+        symbol="C",
+        expiration=EXPIRATION,
+        quotes=[put_132, call_146, call_147, call_148],
+    )
+
+    result = LiquidityOptimizer().optimize(
+        selection(put_132, call_146),
+        chain,
+    )
+
+    assert result.call is call_147
 
 
 def test_reselects_long_legs_after_outward_short_strikes_change():

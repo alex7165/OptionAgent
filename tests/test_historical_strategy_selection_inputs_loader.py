@@ -89,3 +89,31 @@ def test_default_end_date_is_friday_of_earnings_week() -> None:
     )
 
     assert result == date(2026, 7, 17)
+
+
+def test_flexible_exit_mode_keeps_all_analyses_with_one_day() -> None:
+    analysis = SimpleNamespace(price_series=(object(), object()))
+    one_day = SimpleNamespace(daily_moves=(object(),))
+    four_days = SimpleNamespace(
+        daily_moves=(object(), object(), object(), object())
+    )
+    analyzed = SimpleNamespace(price_analyses=(one_day, four_days))
+    analysis_loader = RecordingAnalysisLoader(analysis)
+    analysis_analyzer = RecordingAnalysisAnalyzer(analyzed)
+    loader = HistoricalStrategySelectionInputsLoader(
+        analysis_loader=analysis_loader,
+        analysis_analyzer=analysis_analyzer,
+        reference_price_resolver=object(),
+        exit_trading_day_index=0,
+        call_thresholds=(7.5, 10.0, 12.5),
+        put_thresholds=(-7.5, -10.0, -12.5),
+        policy=HistoricalStrikeSelectionPolicy(
+            max_finish_outside_probability=0.10,
+        ),
+    )
+
+    result = loader.load("NVDA")
+
+    assert result is not None
+    assert result.price_analyses == (one_day, four_days)
+    assert result.exit_trading_day_index == 0

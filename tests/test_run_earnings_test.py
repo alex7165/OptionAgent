@@ -87,3 +87,18 @@ def test_run_batch_uses_factory_and_writes_excel(tmp_path, capsys):
     assert "C" in output
     assert "JPM" in output
     assert "missing_expiration_chain" in output
+
+
+def test_format_selection_details_reports_expected_move_fallback():
+    from app.analysis.strategy_selector import StrikeSelectionSource
+    from app.run_earnings_test import format_selection_details
+
+    candidate = DummyCandidate("C")
+    candidate.strike_selection_source = StrikeSelectionSource.EXPECTED_MOVE
+    candidate.strike_selection_before_liquidity = None
+    candidate.historical_selection_result = None
+    candidate.liquidity_optimization_reason = None
+
+    lines = format_selection_details(candidate)
+
+    assert lines == ["      Auswahlquelle: Expected-Move-Fallback"]

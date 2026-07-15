@@ -66,18 +66,29 @@ class HistoricalStrategySelectorAdapter:
 
         expected_move_percent = expected_move.percent * 100
 
-        historical_result = (
-            self.historical_selection_service.select(
-                price_analyses=price_analyses,
-                expected_move_percent=expected_move_percent,
-                exit_trading_day_index=(
-                    exit_trading_day_index
-                ),
-                call_thresholds=call_thresholds,
-                put_thresholds=put_thresholds,
-                policy=policy,
+        if exit_trading_day_index == 0:
+            historical_result = (
+                self.historical_selection_service.select_best_exit(
+                    price_analyses=price_analyses,
+                    expected_move_percent=expected_move_percent,
+                    call_thresholds=call_thresholds,
+                    put_thresholds=put_thresholds,
+                    policy=policy,
+                )
             )
-        )
+        else:
+            historical_result = (
+                self.historical_selection_service.select(
+                    price_analyses=price_analyses,
+                    expected_move_percent=expected_move_percent,
+                    exit_trading_day_index=(
+                        exit_trading_day_index
+                    ),
+                    call_thresholds=call_thresholds,
+                    put_thresholds=put_thresholds,
+                    policy=policy,
+                )
+            )
 
         adjusted_selection = self.adjusted_selector.select(
             chain=chain,

@@ -13,6 +13,7 @@ class LiquidityOptimizer:
     """Move short legs to an adjacent strike only for clearly better liquidity."""
 
     MIN_OPEN_INTEREST_IMPROVEMENT = 3.0
+    MAX_OUTWARD_STEPS = 2
 
     def __init__(self) -> None:
         self.wing_selector = WingSelector()
@@ -89,36 +90,68 @@ class LiquidityOptimizer:
         except ValueError:
             return current
 
-        candidate = self._outer_neighbor(
+        candidates = self._outward_candidates(
             quotes,
             index,
             option_type,
         )
-        if candidate is None:
+        improvements = [
+            (steps, candidate)
+            for steps, candidate in candidates
+            if self._is_clear_improvement(candidate, current)
+        ]
+        if not improvements:
             return current
 
-        if self._is_clear_improvement(candidate, current):
-            return candidate
+        _, best = max(
+            improvements,
+            key=lambda item: self._liquidity_score(
+                item[1],
+                outward_steps=item[0],
+            ),
+        )
+        return best
 
-        return current
-
-    @staticmethod
-    def _outer_neighbor(
+    def _outward_candidates(
+        self,
         quotes: list[OptionQuote],
         index: int,
         option_type: str,
-    ) -> OptionQuote | None:
+    ) -> list[tuple[int, OptionQuote]]:
         if option_type == "put":
-            if index == 0:
-                return None
-            return quotes[index - 1]
+            return [
+                (steps, quotes[index - steps])
+                for steps in range(1, self.MAX_OUTWARD_STEPS + 1)
+                if index - steps >= 0
+            ]
 
         if option_type == "call":
-            if index + 1 >= len(quotes):
-                return None
-            return quotes[index + 1]
+            return [
+                (steps, quotes[index + steps])
+                for steps in range(1, self.MAX_OUTWARD_STEPS + 1)
+                if index + steps < len(quotes)
+            ]
 
         raise ValueError(f"unsupported option type: {option_type}")
+
+    def _liquidity_score(
+        self,
+        quote: OptionQuote,
+        *,
+        outward_steps: int,
+    ) -> tuple[int, int, int, int, float, int, int, int]:
+        spread = quote.bid_ask_spread_percent
+        spread_score = -(spread if spread is not None else float("inf"))
+        return (
+            self._passed_check_count(quote),
+            int(self._spread_ok(quote)),
+            int(self._open_interest_ok(quote)),
+            int(self._volume_ok(quote)),
+            spread_score,
+            quote.open_interest or 0,
+            quote.volume or 0,
+            -outward_steps,
+        )
 
     def _is_clear_improvement(
         self,

@@ -289,3 +289,62 @@ def test_rejects_invalid_expected_move(
             underlying_price=200.0,
             historical_selection=historical_selection,
         )
+
+def test_expected_move_is_hard_minimum_for_both_sides() -> None:
+    historical_selection = HistoricalStrikeSelection(
+        expected_move_percent=10.0,
+        call_recommendation=make_recommendation(
+            side=StrikeSide.CALL,
+            threshold_percent=7.5,
+            expected_move_threshold_percent=10.0,
+        ),
+        put_recommendation=make_recommendation(
+            side=StrikeSide.PUT,
+            threshold_percent=-7.5,
+            expected_move_threshold_percent=-10.0,
+        ),
+    )
+
+    result = make_selector().select(
+        chain=make_chain(),
+        underlying_price=200.0,
+        historical_selection=historical_selection,
+        strategy=Strategy.SHORT_STRANGLE,
+    )
+
+    assert result.adjustment.put_percent == pytest.approx(0.10)
+    assert result.adjustment.call_percent == pytest.approx(0.10)
+    assert not result.adjustment.put_was_adjusted
+    assert not result.adjustment.call_was_adjusted
+    assert result.strike_selection.put_target == pytest.approx(180.0)
+    assert result.strike_selection.call_target == pytest.approx(220.0)
+
+
+def test_compares_expected_move_and_history_per_side() -> None:
+    historical_selection = HistoricalStrikeSelection(
+        expected_move_percent=10.0,
+        call_recommendation=make_recommendation(
+            side=StrikeSide.CALL,
+            threshold_percent=7.5,
+            expected_move_threshold_percent=10.0,
+        ),
+        put_recommendation=make_recommendation(
+            side=StrikeSide.PUT,
+            threshold_percent=-15.0,
+            expected_move_threshold_percent=-10.0,
+        ),
+    )
+
+    result = make_selector().select(
+        chain=make_chain(),
+        underlying_price=200.0,
+        historical_selection=historical_selection,
+        strategy=Strategy.SHORT_STRANGLE,
+    )
+
+    assert result.adjustment.put_percent == pytest.approx(0.15)
+    assert result.adjustment.call_percent == pytest.approx(0.10)
+    assert result.adjustment.put_was_adjusted
+    assert not result.adjustment.call_was_adjusted
+    assert result.strike_selection.put_target == pytest.approx(170.0)
+    assert result.strike_selection.call_target == pytest.approx(220.0)

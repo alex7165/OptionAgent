@@ -79,40 +79,46 @@ class HistoricalStrikeAdjustedSelector:
             historical_selection.put_recommendation
         )
 
-        call_threshold_percent = (
-            call_recommendation
-            .recommended_threshold_percent
+        historical_call_percent = (
+            call_recommendation.recommended_threshold_percent
             if call_recommendation is not None
             else expected_move_percent
         )
-
-        put_threshold_percent = (
-            put_recommendation
-            .recommended_threshold_percent
+        historical_put_percent = abs(
+            put_recommendation.recommended_threshold_percent
             if put_recommendation is not None
             else -expected_move_percent
         )
 
-        if call_threshold_percent <= 0:
+        if historical_call_percent <= 0:
             raise ValueError(
                 "Call threshold must be greater than zero"
             )
 
-        if put_threshold_percent >= 0:
+        if historical_put_percent <= 0:
             raise ValueError(
-                "Put threshold must be less than zero"
+                "Put threshold distance must be greater than zero"
             )
+
+        call_percent = max(
+            expected_move_percent,
+            historical_call_percent,
+        )
+        put_percent = max(
+            expected_move_percent,
+            historical_put_percent,
+        )
 
         return HistoricalStrikeAdjustment(
             expected_move_percent=expected_move_percent,
-            put_percent=abs(
-                put_threshold_percent
-            ) / 100,
-            call_percent=call_threshold_percent / 100,
+            put_percent=put_percent / 100,
+            call_percent=call_percent / 100,
             put_was_adjusted=(
                 put_recommendation is not None
+                and historical_put_percent > expected_move_percent
             ),
             call_was_adjusted=(
                 call_recommendation is not None
+                and historical_call_percent > expected_move_percent
             ),
         )

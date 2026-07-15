@@ -381,3 +381,27 @@ def test_rejects_when_an_event_has_no_selected_exit_day() -> None:
                 max_finish_outside_probability=0.25,
             ),
         )
+
+
+def test_select_best_exit_chooses_smallest_expected_move_adjustment() -> None:
+    result = make_service().select_best_exit(
+        price_analyses=make_price_analyses(),
+        expected_move_percent=9.0,
+        call_thresholds=(10.0, 12.5, 15.0),
+        put_thresholds=(-10.0, -12.5, -15.0),
+        policy=HistoricalStrikeSelectionPolicy(
+            max_finish_outside_probability=0.25,
+            max_reached_probability=0.50,
+        ),
+    )
+
+    assert result.selection.call_recommendation is not None
+    assert result.selection.put_recommendation is not None
+    assert (
+        result.selection.call_recommendation.exit_trading_day_index
+        == 1
+    )
+    assert (
+        result.selection.put_recommendation.exit_trading_day_index
+        == 1
+    )

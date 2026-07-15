@@ -33,9 +33,9 @@ class HistoricalStrategySelectionInputsLoader:
             date,
         ] | None = None,
     ) -> None:
-        if exit_trading_day_index < 1:
+        if exit_trading_day_index < 0:
             raise ValueError(
-                "exit_trading_day_index must be at least 1"
+                "exit_trading_day_index must not be negative"
             )
 
         self.analysis_loader = analysis_loader
@@ -70,11 +70,15 @@ class HistoricalStrategySelectionInputsLoader:
             ),
         )
 
+        minimum_required_days = max(
+            1,
+            self.exit_trading_day_index,
+        )
         usable_price_analyses = tuple(
             price_analysis
             for price_analysis in result.price_analyses
             if len(price_analysis.daily_moves)
-            >= self.exit_trading_day_index
+            >= minimum_required_days
         )
 
         if not usable_price_analyses:

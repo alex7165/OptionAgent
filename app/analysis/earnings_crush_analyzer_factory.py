@@ -101,7 +101,7 @@ class EarningsCrushAnalyzerFactory:
                         price_history_provider=price_history_provider,
                     )
                 ),
-                exit_trading_day_index=3,
+                exit_trading_day_index=0,
                 call_thresholds=(
                     5.0,
                     7.5,

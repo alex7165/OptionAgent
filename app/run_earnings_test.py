@@ -8,6 +8,7 @@ from typing import Iterable
 from app.analysis.earnings_crush_analyzer_factory import (
     EarningsCrushAnalyzerFactory,
 )
+from app.analysis.strategy_selector import StrikeSelectionSource
 from app.analysis.trade_exporter import TradeExporter
 from app.marketdata.models import EarningsEvent
 from app.marketdata.service import MarketDataService
@@ -78,6 +79,106 @@ def format_candidate(candidate) -> str:
     )
 
 
+
+def format_selection_details(candidate) -> list[str]:
+    report = getattr(candidate, "decision_report", None)
+    if report is None:
+        source = getattr(candidate, "strike_selection_source", None)
+        if source is None:
+            return []
+        source_text = (
+            "Historisch"
+            if source is StrikeSelectionSource.HISTORICAL
+            else "Expected-Move-Fallback"
+        )
+        return [f"      Auswahlquelle: {source_text}"]
+
+    source_text = (
+        "Historisch"
+        if report.selection_source is StrikeSelectionSource.HISTORICAL
+        else "Expected-Move-Fallback"
+    )
+    lines = [f"      Auswahlquelle: {source_text}"]
+
+    if (
+        report.initial_put_strike is not None
+        and report.initial_call_strike is not None
+    ):
+        lines.append(
+            "      Vor Liquidität: "
+            f"Put {report.initial_put_strike:g}, "
+            f"Call {report.initial_call_strike:g}"
+        )
+
+    if (
+        report.final_put_strike is not None
+        and report.final_call_strike is not None
+    ):
+        lines.append(
+            "      Nach Liquidität: "
+            f"Put {report.final_put_strike:g}, "
+            f"Call {report.final_call_strike:g}"
+        )
+
+    if report.liquidity_optimization_reason:
+        lines.append(
+            "      Optimierung: "
+            f"{report.liquidity_optimization_reason}"
+        )
+
+    lines.append(
+        "      Aktueller Expected Move: "
+        f"±{report.expected_move_percent:.2f} %"
+    )
+
+    if report.historical_sample_size is None:
+        return lines
+
+    lines.extend(
+        [
+            (
+                "      Exit: Handelstag "
+                f"{report.exit_trading_day_index}; "
+                "Historische Fälle: "
+                f"{report.historical_sample_size}"
+            ),
+            (
+                "      Historische Schlussbewegung bis Exit: "
+                f"Ø {report.historical_average_abs_close_move_percent:.2f} %, "
+                f"Median {report.historical_median_abs_close_move_percent:.2f} %, "
+                f"Max {report.historical_max_abs_close_move_percent:.2f} %"
+            ),
+            (
+                "      Historische Ziele: "
+                f"Put {report.historical_put_target_percent:.2f} %, "
+                f"Call +{report.historical_call_target_percent:.2f} %"
+            ),
+            (
+                "      Verwendete Ziele: "
+                f"Put {report.used_put_target_percent:.2f} % "
+                f"({report.put_target_basis}), "
+                f"Call +{report.used_call_target_percent:.2f} % "
+                f"({report.call_target_basis})"
+            ),
+            (
+                "      Close außerhalb: "
+                f"Put {report.put_finish_outside_probability * 100:.1f} %, "
+                f"Call {report.call_finish_outside_probability * 100:.1f} %"
+            ),
+            (
+                "      Berührung: "
+                f"Put {report.put_reached_probability * 100:.1f} %, "
+                f"Call {report.call_reached_probability * 100:.1f} %"
+            ),
+            (
+                "      Ø Bewegung bis Exit: "
+                f"Tief {report.average_low_percent_until_exit:.2f} %, "
+                f"Hoch +{report.average_high_percent_until_exit:.2f} %"
+            ),
+        ]
+    )
+    return lines
+
 def run_batch(
     symbols: Iterable[str],
     report_date: date,
@@ -101,6 +202,8 @@ def run_batch(
 
     for candidate in candidates:
         print(format_candidate(candidate))
+        for detail_line in format_selection_details(candidate):
+            print(detail_line)
 
     return candidates
 
