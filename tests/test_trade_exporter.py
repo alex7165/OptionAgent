@@ -56,3 +56,46 @@ def test_trade_exporter_exports_short_strangle():
     assert rows[0].aktie == "NVDA"
     assert rows[0].short_put_strike == 190
     assert rows[0].short_call_strike == 210
+
+def test_trade_exporter_includes_score_without_changing_symbol_order():
+    candidate = EarningsCrushCandidate(
+        earnings_event=EarningsEvent(
+            symbol="GS",
+            report_date=date(2026, 8, 26),
+            timing="AMC",
+            source="test",
+        ),
+        snapshot=MarketSnapshot(
+            symbol="GS",
+            quote=Quote("GS", 100, "USD", "test"),
+            news=[],
+        ),
+    )
+    candidate.strike_selection = StrikeSelection(
+        put=OptionQuote(
+            symbol="GS",
+            expiration=date(2026, 8, 28),
+            strike=90,
+            option_type="put",
+        ),
+        call=OptionQuote(
+            symbol="GS",
+            expiration=date(2026, 8, 28),
+            strike=110,
+            option_type="call",
+        ),
+        put_target=90,
+        call_target=110,
+    )
+
+    class Score:
+        total = 87
+
+    class Report:
+        trade_score = Score()
+
+    candidate.decision_report = Report()
+
+    rows = TradeExporter().export_rows([candidate])
+
+    assert rows[0].score == 87

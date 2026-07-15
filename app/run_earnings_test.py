@@ -98,7 +98,22 @@ def format_selection_details(candidate) -> list[str]:
         if report.selection_source is StrikeSelectionSource.HISTORICAL
         else "Expected-Move-Fallback"
     )
-    lines = [f"      Auswahlquelle: {source_text}"]
+    lines = [
+        f"      Auswahlquelle: {source_text}",
+        (
+            "      Trade Score: "
+            f"{report.trade_score.total}/100 "
+            "("
+            f"Markt {report.trade_score.market_component:.1f}/35, "
+            f"Historisches Risiko "
+            f"{report.trade_score.historical_risk_component:.1f}/25, "
+            f"Stichprobe "
+            f"{report.trade_score.historical_sample_component:.1f}/10, "
+            f"Liquidität "
+            f"{report.trade_score.liquidity_component:.1f}/30"
+            ")"
+        ),
+    ]
 
     if (
         report.initial_put_strike is not None

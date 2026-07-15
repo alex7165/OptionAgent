@@ -5,6 +5,7 @@ from statistics import median
 
 from app.analysis.earnings_crush_candidate import EarningsCrushCandidate
 from app.analysis.strategy_selector import StrikeSelectionSource
+from app.analysis.trade_score import TradeScore, TradeScoreCalculator
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,9 +34,13 @@ class DecisionReport:
     final_put_strike: float | None
     final_call_strike: float | None
     liquidity_optimization_reason: str | None
+    trade_score: TradeScore
 
 
 class DecisionReportBuilder:
+
+    def __init__(self, score_calculator: TradeScoreCalculator | None = None) -> None:
+        self.score_calculator = score_calculator or TradeScoreCalculator()
 
     def build(self, candidate: EarningsCrushCandidate) -> DecisionReport | None:
         if (
@@ -60,6 +65,17 @@ class DecisionReportBuilder:
 
         historical = candidate.historical_selection_result
         if historical is None:
+            score = self.score_calculator.calculate(
+                expected_move_percent=expected_move_percent,
+                used_put_target_percent=used_put_target_percent,
+                used_call_target_percent=used_call_target_percent,
+                put_reached_probability=None,
+                call_reached_probability=None,
+                put_finish_outside_probability=None,
+                call_finish_outside_probability=None,
+                historical_sample_size=None,
+                liquidity=candidate.liquidity,
+            )
             return DecisionReport(
                 selection_source=candidate.strike_selection_source,
                 expected_move_percent=expected_move_percent,
@@ -87,6 +103,7 @@ class DecisionReportBuilder:
                 liquidity_optimization_reason=(
                     candidate.liquidity_optimization_reason
                 ),
+                trade_score=score,
             )
 
         call = historical.selection.call_recommendation
@@ -106,6 +123,18 @@ class DecisionReportBuilder:
             outcome.highest_percent_until_exit
             for outcome in historical.outcomes
         ) / len(historical.outcomes)
+
+        score = self.score_calculator.calculate(
+            expected_move_percent=expected_move_percent,
+            used_put_target_percent=used_put_target_percent,
+            used_call_target_percent=used_call_target_percent,
+            put_reached_probability=put.reached_probability,
+            call_reached_probability=call.reached_probability,
+            put_finish_outside_probability=put.finish_outside_probability,
+            call_finish_outside_probability=call.finish_outside_probability,
+            historical_sample_size=call.observation_count,
+            liquidity=candidate.liquidity,
+        )
 
         return DecisionReport(
             selection_source=candidate.strike_selection_source,
@@ -158,6 +187,7 @@ class DecisionReportBuilder:
             liquidity_optimization_reason=(
                 candidate.liquidity_optimization_reason
             ),
+            trade_score=score,
         )
 
     @staticmethod

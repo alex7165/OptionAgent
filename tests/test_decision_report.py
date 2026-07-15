@@ -7,6 +7,7 @@ from app.analysis.historical_outcome_analyzer import HistoricalOutcome
 from app.analysis.historical_strike_risk_analyzer import StrikeSide
 from app.analysis.historical_strike_risk_grid_analyzer import HistoricalStrikeRiskGrid
 from app.analysis.historical_strike_selection_service import HistoricalStrikeSelectionResult
+from app.analysis.liquidity_rating import LiquidityRating
 from app.analysis.historical_strike_selector import (
     HistoricalStrikeRecommendation,
     HistoricalStrikeSelection,
@@ -102,3 +103,35 @@ def test_compares_current_expected_move_with_historical_moves():
     assert report.call_target_basis == "Historie"
     assert report.put_target_basis == "Expected Move"
     assert report.exit_trading_day_index == 2
+
+
+def test_trade_score_uses_market_history_sample_and_liquidity():
+    candidate = _candidate()
+    candidate.strike_selection_source = StrikeSelectionSource.HISTORICAL
+    candidate.liquidity = LiquidityRating(
+        spread_percent=0.05,
+        open_interest=1200,
+        volume=200,
+    )
+    candidate.historical_selection_result = HistoricalStrikeSelectionResult(
+        outcomes=(
+            HistoricalOutcome(2, date(2026, 1, 2), 4.0, 5.0, -2.0, 2),
+            HistoricalOutcome(2, date(2026, 4, 2), -8.0, 3.0, -9.0, 2),
+            HistoricalOutcome(2, date(2026, 7, 2), 2.0, 4.0, -1.0, 2),
+        ),
+        risk_grid=HistoricalStrikeRiskGrid(call_risks=(), put_risks=()),
+        selection=HistoricalStrikeSelection(
+            expected_move_percent=6.0,
+            call_recommendation=_recommendation(StrikeSide.CALL, 7.0),
+            put_recommendation=_recommendation(StrikeSide.PUT, -6.0),
+        ),
+    )
+
+    report = DecisionReportBuilder().build(candidate)
+
+    assert report is not None
+    assert 0 <= report.trade_score.total <= 100
+    assert report.trade_score.market_component > 0
+    assert report.trade_score.historical_risk_component > 0
+    assert report.trade_score.historical_sample_component > 0
+    assert report.trade_score.liquidity_component == 30.0

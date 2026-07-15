@@ -10,6 +10,7 @@ class TradeExporter:
         "Aktie",
         "Kurs",
         "Strategie",
+        "Score",
         "ShortPutProzent",
         "LongPutProzent",
         "ShortCallProzent",
@@ -41,6 +42,11 @@ class TradeExporter:
                     aktie=candidate.earnings_event.symbol,
                     kurs=price,
                     strategie=strategy,
+                    score=(
+                        candidate.decision_report.trade_score.total
+                        if candidate.decision_report is not None
+                        else None
+                    ),
                     short_put_prozent=(selection.put.strike / price - 1) * 100,
                     long_put_prozent=(
                         (selection.long_put.strike / price - 1) * 100
@@ -86,6 +92,7 @@ class TradeExporter:
                     row.aktie,
                     row.kurs,
                     row.strategie,
+                    row.score,
                     row.short_put_prozent,
                     row.long_put_prozent,
                     row.short_call_prozent,

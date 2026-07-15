@@ -6,6 +6,7 @@ class TradeExportRow:
     aktie: str
     kurs: float
     strategie: str
+    score: int | None = None
     short_put_prozent: float | None = None
     long_put_prozent: float | None = None
     short_call_prozent: float | None = None
