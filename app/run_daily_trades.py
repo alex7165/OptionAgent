@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date
+from collections import Counter
+from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 from app.analysis.daily_trade_window_selector import DailyTradeWindowSelector
 from app.analysis.earnings_crush_analyzer_factory import EarningsCrushAnalyzerFactory
@@ -10,7 +12,11 @@ from app.analysis.trade_exporter import TradeExporter
 from app.marketdata.savvytrader_earnings_calendar_provider import (
     SavvyTraderEarningsCalendarProvider,
 )
-from app.run_earnings_test import build_market_data, format_candidate, format_selection_details
+from app.run_earnings_test import (
+    build_market_data,
+    format_candidate,
+    format_selection_details,
+)
 
 
 def run_daily(
@@ -23,16 +29,13 @@ def run_daily(
     selector = DailyTradeWindowSelector()
     next_date = selector.next_trading_weekday(trade_date)
     calendar_provider = calendar_provider or SavvyTraderEarningsCalendarProvider()
-    events = calendar_provider.get_events(trade_date, next_date)
+
+    # SavvyTrader's end boundary is treated conservatively as exclusive.
+    # Request one extra calendar day; the selector still accepts only the two
+    # exact earnings windows required for this trade date.
+    query_end = next_date + timedelta(days=1)
+    events = calendar_provider.get_events(trade_date, query_end)
     window = selector.select(events, trade_date)
-
-    market_data = market_data or build_market_data()
-    analyzer_factory = analyzer_factory or EarningsCrushAnalyzerFactory()
-    analyzer = analyzer_factory.create(market_data)
-    candidates = analyzer.create_candidates(list(window.events))
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    TradeExporter().export_excel(candidates, output_path)
 
     print(f"Trade-Datum: {trade_date.isoformat()}")
     print(
@@ -40,8 +43,48 @@ def run_daily(
         f"{trade_date.isoformat()} after market close + "
         f"{window.next_trading_date.isoformat()} before market open"
     )
-    print(f"Kandidaten: {len(window.events)}")
+    print(f"Kalender-Rohdaten: {len(events)}")
+    print(f"Passende Earnings: {len(window.events)}")
+
+    if not window.events:
+        timings = Counter(
+            (event.timing or "<ohne Timing>")
+            for event in events
+            if event.report_date in {trade_date, next_date}
+        )
+        if timings:
+            print("Gefundene Timing-Werte im relevanten Datumsbereich:")
+            for timing, count in sorted(timings.items()):
+                print(f"  {timing}: {count}")
+        else:
+            print("Keine Kalendereinträge für die beiden relevanten Tage gefunden.")
+
+    market_data = market_data or build_market_data()
+    analyzer_factory = analyzer_factory or EarningsCrushAnalyzerFactory()
+    analyzer = analyzer_factory.create(market_data)
+    candidates = []
+    technical_errors: list[tuple[str, str]] = []
+
+    for event in window.events:
+        try:
+            event_candidates = analyzer.create_candidates([event])
+        except Exception as exc:  # One bad symbol must not stop the day.
+            reason = _technical_error_reason(exc)
+            technical_errors.append((event.symbol, reason))
+            print(
+                f"{event.symbol:<6} TECHNISCHER FEHLER "
+                f"Grund: {reason}"
+            )
+            continue
+
+        candidates.extend(event_candidates)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    TradeExporter().export_excel(candidates, output_path)
+
     print(f"Excel-Export: {output_path}")
+    print(f"Analysiert: {len(candidates)}")
+    print(f"Technische Fehler: {len(technical_errors)}")
     print()
 
     for candidate in candidates:
@@ -49,7 +92,26 @@ def run_daily(
         for detail in format_selection_details(candidate):
             print(detail)
 
+    if technical_errors:
+        print("Technische Fehler im Überblick:")
+        for symbol, reason in technical_errors:
+            print(f"  {symbol}: {reason}")
+
     return candidates
+
+
+def _technical_error_reason(exc: Exception) -> str:
+    response: Any | None = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+
+    if status_code == 404:
+        return "option_chain_not_available"
+
+    message = str(exc).strip()
+    if not message:
+        return type(exc).__name__
+
+    return f"{type(exc).__name__}: {message}"
 
 
 def parse_args() -> argparse.Namespace:
