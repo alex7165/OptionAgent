@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from enum import StrEnum
 
 from app.analysis.entry_decision_snapshot import EntryDecisionSnapshot
 from app.marketdata.models import OptionQuote
+from app.analysis.trade_management_chart_context import TradeManagementChartContext
 
 
 class ManagementAction(StrEnum):
     CLOSE = "Schließen"
     HOLD = "Halten"
     ROLL_CALL = "Call nach oben rollen"
-    BUY_SHARES = "Aktien als Delta-Hedge kaufen"
+    ADJUST_DELTA_HEDGE = "Delta-Hedge anpassen"
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +22,7 @@ class HistoricalManagementContext:
     probability_finish_back_inside: float | None
     probability_continue_higher: float | None
     average_remaining_move_percent: float | None
+    total_observation_count: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +33,9 @@ class TradeManagerMarketState:
     short_call: OptionQuote
     replacement_call: OptionQuote | None = None
     short_call_delta: float | None = None
+    short_put_delta: float | None = None
+    existing_hedge_shares: int = 0
+    chart_context: TradeManagementChartContext | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,12 +96,16 @@ class TradeManagerAdvisor:
             close_score += 10.0
         if (history.probability_continue_higher or 0) >= 0.60:
             close_score += 10.0
+        if market.chart_context is not None:
+            close_score += min(15.0, market.chart_context.revaluation_signal_count * 3.0)
 
         hold_score = 55.0 - min(45.0, breach_percent * 8.0)
         if history.probability_finish_back_inside is not None:
             hold_score += 30.0 * history.probability_finish_back_inside
         if market.days_to_expiration <= 2 and breach_percent > 0:
             hold_score -= 15.0
+        if market.chart_context is not None:
+            hold_score -= min(18.0, market.chart_context.revaluation_signal_count * 3.0)
 
         roll = self._roll_alternative(entry, market, history, breach_percent)
         hedge = self._hedge_alternative(market, history, breached_side)
@@ -163,6 +173,8 @@ class TradeManagerAdvisor:
                 score += 8.0
             if (history.probability_continue_higher or 0) >= 0.60:
                 score += 5.0
+            if market.chart_context is not None:
+                score += min(10.0, market.chart_context.revaluation_signal_count * 2.0)
             details.extend(
                 (
                     f"Neuer Call {replacement.strike:g}; Abstand zum aktuellen Kurs {new_buffer:.2f} %.",
@@ -185,32 +197,66 @@ class TradeManagerAdvisor:
         history: HistoricalManagementContext,
         breached_side: str | None,
     ) -> ManagementAlternative:
-        available = breached_side == "call" and market.short_call_delta is not None
-        shares = None
+        call_delta = self._finite_delta(
+            market.short_call_delta, market.short_call.delta
+        )
+        put_delta = self._finite_delta(
+            market.short_put_delta, market.short_put.delta
+        )
+        available = breached_side == "call" and call_delta is not None
+        target_shares = None
+        adjustment = None
         score = 40.0
         details: list[str] = []
-        if available and market.short_call_delta is not None:
-            shares = max(0, round(abs(market.short_call_delta) * 100))
+        if available and call_delta is not None:
+            # Long-option deltas: call positive, put negative. Shorting both
+            # reverses their sign. Long shares offset the resulting net delta.
+            effective_put_delta = put_delta if put_delta is not None else 0.0
+            net_option_delta_shares = -(call_delta + effective_put_delta) * 100
+            target_shares = max(0, round(-net_option_delta_shares))
+            adjustment = target_shares - market.existing_hedge_shares
             score = 58.0
             if (history.probability_continue_higher or 0) >= 0.60:
                 score += 12.0
+            direction = "kaufen" if adjustment > 0 else "verkaufen"
+            if adjustment == 0:
+                action_text = "Aktuell keine weitere Aktienanpassung nötig."
+            else:
+                action_text = f"Heute {abs(adjustment)} GS-Aktien {direction}."
             details.extend(
                 (
-                    f"Delta-Hedge: ungefähr {shares} GS-Aktien je Short Call kaufen.",
-                    "Hedge muss wegen Gamma bis zum Verfall aktiv nachgesteuert werden.",
+                    f"Netto-Optionsdelta ungefähr {net_option_delta_shares:+.0f} Aktienäquivalente.",
+                    f"Zielbestand Hedge: {target_shares} Aktien; aktuell: {market.existing_hedge_shares}.",
+                    action_text,
+                    "Hedge bei jeder Neubewertung neu berechnen und spätestens beim Schließen der Optionen vollständig auflösen.",
+                    "Ein partieller Hedge darf nicht unbeaufsichtigt bis zur Ausübung stehen bleiben.",
                 )
             )
         else:
-            details.append("Aktuelles Call-Delta fehlt; seriöse Aktienzahl nicht berechenbar.")
+            details.append(
+                "Optionsdelta fehlt; zuerst OptionStrat-Delta verwenden, sonst Delta aus IV, Laufzeit und Optionspreis berechnen."
+            )
         return ManagementAlternative(
-            action=ManagementAction.BUY_SHARES,
+            action=ManagementAction.ADJUST_DELTA_HEDGE,
             available=available,
             score=self._bounded(score),
             estimated_cash_flow=(
-                -shares * market.underlying_price if shares is not None else None
+                -adjustment * market.underlying_price
+                if adjustment is not None
+                else None
             ),
             details=tuple(details),
         )
+
+    @staticmethod
+    def _finite_delta(*values: float | None) -> float | None:
+        for value in values:
+            if value is None:
+                continue
+            number = float(value)
+            if isfinite(number):
+                return number
+        return None
 
     @staticmethod
     def _sum_asks(*quotes: OptionQuote) -> float | None:

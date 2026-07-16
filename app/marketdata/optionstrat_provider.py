@@ -128,6 +128,8 @@ class OptionStratProvider:
                         last=quote.get("p"),
                         volume=quote.get("v"),
                         open_interest=quote.get("o"),
+                        implied_volatility=quote.get("iv", quote.get("i")),
+                        delta=quote.get("delta", quote.get("d")),
                     )
                 )
 
@@ -183,4 +185,6 @@ class OptionStratProvider:
             last=quote.get("p"),
             volume=quote.get("v"),
             open_interest=quote.get("o"),
+            implied_volatility=quote.get("iv", quote.get("i")),
+            delta=quote.get("delta", quote.get("d")),
         )

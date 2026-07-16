@@ -34,6 +34,8 @@ class OptionQuote:
     last: float | None = None
     volume: int | None = None
     open_interest: int | None = None
+    implied_volatility: float | None = None
+    delta: float | None = None
 
     @property
     def mid(self) -> float | None:

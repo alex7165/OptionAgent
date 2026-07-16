@@ -94,6 +94,34 @@ def test_share_hedge_is_unavailable_without_delta():
         ),
         HistoricalManagementContext(0, None, None, None),
     )
-    hedge = next(item for item in advice.alternatives if item.action is ManagementAction.BUY_SHARES)
+    hedge = next(item for item in advice.alternatives if item.action is ManagementAction.ADJUST_DELTA_HEDGE)
 
     assert hedge.available is False
+
+
+def test_delta_hedge_uses_net_strangle_delta_and_existing_shares():
+    put = quote(990, "put", 0.1, 0.2)
+    put.delta = -0.02
+    call = quote(1095, "call", 44.0, 46.0)
+    call.delta = 0.65
+    advice = TradeManagerAdvisor().advise(
+        entry(),
+        TradeManagerMarketState(
+            underlying_price=1152.0,
+            days_to_expiration=1,
+            short_put=put,
+            short_call=call,
+            replacement_call=None,
+            existing_hedge_shares=20,
+        ),
+        HistoricalManagementContext(3, 0.0, 0.33, 0.26),
+    )
+    hedge = next(
+        item for item in advice.alternatives
+        if item.action is ManagementAction.ADJUST_DELTA_HEDGE
+    )
+
+    assert hedge.available is True
+    assert hedge.estimated_cash_flow == -(43 * 1152.0)
+    assert any("Zielbestand Hedge: 63 Aktien; aktuell: 20" in x for x in hedge.details)
+    assert any("Heute 43 GS-Aktien kaufen" in x for x in hedge.details)

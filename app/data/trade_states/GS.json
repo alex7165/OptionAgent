@@ -1,0 +1,20 @@
+{
+  "symbol": "GS",
+  "entry": {
+    "symbol": "GS",
+    "decision_date": "2026-07-13",
+    "report_date": "2026-07-14",
+    "expiration": "2026-07-17",
+    "strategy": "Short Strangle",
+    "reference_price": 1042.45,
+    "short_put_strike": 990.0,
+    "short_call_strike": 1095.0,
+    "expected_move_percent": null,
+    "selected_exit_trading_day_index": null
+  },
+  "hedge_shares": 0,
+  "realized_cash_flow": 0.0,
+  "is_open": true,
+  "last_evaluated_at": "2026-07-16T10:47:54.070887",
+  "actions": []
+}
