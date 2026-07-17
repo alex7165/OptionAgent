@@ -7,6 +7,9 @@ from app.analysis.management_outcome_collection import ManagementOutcomeCollecti
 from app.analysis.management_strategy import ManagementStrategy
 from app.analysis.strategies.close_day1_strategy import CloseDay1Strategy
 from app.analysis.strategies.hold_to_friday_strategy import HoldToFridayStrategy
+from app.analysis.strategies.roll_to_new_strike_strategy import (
+    RollToNewStrikeStrategy,
+)
 from app.analysis.trade_manager_advisor import (
     ComparableManagementCase,
     HistoricalManagementContext,
@@ -40,6 +43,7 @@ class HistoricalTradeManagementContextLoader:
         self.management_strategies = management_strategies or (
             CloseDay1Strategy(),
             HoldToFridayStrategy(),
+            RollToNewStrikeStrategy(),
         )
 
     def load(

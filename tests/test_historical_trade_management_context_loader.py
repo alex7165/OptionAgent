@@ -311,7 +311,7 @@ def test_adds_management_outcome_collection_for_each_comparable_case():
     assert collection.earnings_date == date(2025, 7, 15)
     assert collection.reference_price == pytest.approx(100.0)
 
-    close_after_reaction, hold_to_friday = collection.outcomes
+    close_after_reaction, hold_to_friday, roll_to_new_strike = collection.outcomes
     assert close_after_reaction.strategy_name == "close_after_reaction"
     assert close_after_reaction.exit_day == 1
     assert close_after_reaction.final_move_percent == pytest.approx(9.0)
@@ -323,6 +323,10 @@ def test_adds_management_outcome_collection_for_each_comparable_case():
     assert hold_to_friday.finished_inside_strikes is True
     assert hold_to_friday.max_favorable_move == pytest.approx(10.0)
     assert hold_to_friday.max_adverse_move == pytest.approx(-2.0)
+
+    assert roll_to_new_strike.strategy_name == "roll_to_new_strike"
+    assert roll_to_new_strike.exit_reason == "rolled_call_to_new_strike"
+    assert roll_to_new_strike.finished_inside_strikes is True
 
 
 def test_management_outcomes_remain_available_below_minimum_observations():
