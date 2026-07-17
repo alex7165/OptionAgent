@@ -6,6 +6,7 @@ from math import isfinite
 from enum import StrEnum
 
 from app.analysis.entry_decision_snapshot import EntryDecisionSnapshot
+from app.analysis.management_outcome_collection import ManagementOutcomeCollection
 from app.marketdata.models import OptionQuote
 from app.analysis.trade_management_chart_context import TradeManagementChartContext
 
@@ -34,6 +35,7 @@ class HistoricalManagementContext:
     average_remaining_move_percent: float | None
     total_observation_count: int | None = None
     comparable_cases: tuple[ComparableManagementCase, ...] = ()
+    management_outcomes: tuple[ManagementOutcomeCollection, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

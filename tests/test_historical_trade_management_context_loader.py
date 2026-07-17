@@ -273,3 +273,73 @@ def test_does_not_use_current_move_as_comparability_filter():
 
     assert result.observation_count == 1
     assert result.comparable_cases[0].maximum_move_percent == pytest.approx(6.0)
+
+
+def test_adds_management_outcome_collection_for_each_comparable_case():
+    class Dates:
+        def get_report_dates(self, symbol):
+            return (date(2025, 7, 15),)
+
+    class ManagementPrices:
+        def get_daily_bars(self, symbol, start_date, end_date):
+            return (
+                DailyBar(date(2024, 1, 2), 80, 90, 79, 85, 1),
+                DailyBar(date(2025, 7, 14), 100, 101, 99, 100, 1),
+                DailyBar(date(2025, 7, 15), 108, 110, 107, 109, 1),
+                DailyBar(date(2025, 7, 16), 106, 108, 103, 104, 1),
+                DailyBar(date(2025, 7, 17), 102, 104, 100, 101, 1),
+                DailyBar(date(2025, 7, 18), 100, 102, 98, 100, 1),
+            )
+
+    entry = EntryDecisionSnapshot(
+        "GS",
+        date(2026, 7, 13),
+        date(2026, 7, 14),
+        date(2026, 7, 17),
+        Strategy.SHORT_STRANGLE,
+        100,
+        90,
+        105,
+    )
+    result = HistoricalTradeManagementContextLoader(
+        Dates(), ManagementPrices(), minimum_observations=1
+    ).load(entry, date(2026, 7, 16), 110)
+
+    assert len(result.management_outcomes) == 1
+    collection = result.management_outcomes[0]
+    assert collection.symbol == "GS"
+    assert collection.earnings_date == date(2025, 7, 15)
+    assert collection.reference_price == pytest.approx(100.0)
+
+    close_after_reaction, hold_to_friday = collection.outcomes
+    assert close_after_reaction.strategy_name == "close_after_reaction"
+    assert close_after_reaction.exit_day == 1
+    assert close_after_reaction.final_move_percent == pytest.approx(9.0)
+    assert close_after_reaction.finished_inside_strikes is False
+
+    assert hold_to_friday.strategy_name == "hold_to_friday"
+    assert hold_to_friday.exit_day == 4
+    assert hold_to_friday.final_move_percent == pytest.approx(0.0)
+    assert hold_to_friday.finished_inside_strikes is True
+    assert hold_to_friday.max_favorable_move == pytest.approx(10.0)
+    assert hold_to_friday.max_adverse_move == pytest.approx(-2.0)
+
+
+def test_management_outcomes_remain_available_below_minimum_observations():
+    entry = EntryDecisionSnapshot(
+        "GS",
+        date(2026, 7, 13),
+        date(2026, 7, 14),
+        date(2026, 7, 17),
+        Strategy.SHORT_STRANGLE,
+        100,
+        90,
+        105,
+    )
+    result = HistoricalTradeManagementContextLoader(
+        EarningsDates(), Prices(), minimum_observations=3
+    ).load(entry, date(2026, 7, 15), 109)
+
+    assert result.observation_count == 2
+    assert result.probability_finish_back_inside is None
+    assert len(result.management_outcomes) == 2

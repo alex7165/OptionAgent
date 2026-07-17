@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from app.analysis.entry_decision_snapshot import EntryDecisionSnapshot
+from app.analysis.management_outcome import ManagementOutcome
+from app.analysis.management_outcome_collection import ManagementOutcomeCollection
 from app.analysis.trade_manager_advisor import (
     ComparableManagementCase,
     HistoricalManagementContext,
@@ -56,6 +58,7 @@ class HistoricalTradeManagementContextLoader:
         continues_higher: list[bool] = []
         remaining_moves: list[float] = []
         comparable_cases: list[ComparableManagementCase] = []
+        management_outcomes: list[ManagementOutcomeCollection] = []
         total_observation_count = 0
 
         for report_date in report_dates:
@@ -110,6 +113,16 @@ class HistoricalTradeManagementContextLoader:
                     made_all_time_high=made_all_time_high,
                 )
             )
+            management_outcomes.append(
+                self._build_management_outcomes(
+                    entry=entry,
+                    report_date=report_date,
+                    reference_price=reference,
+                    reaction_bar=reaction,
+                    after_reaction=tuple(after_reaction),
+                    made_all_time_high=made_all_time_high,
+                )
+            )
 
         count = len(finishes_inside)
         cases = tuple(sorted(comparable_cases, key=lambda item: item.report_date, reverse=True))
@@ -121,6 +134,13 @@ class HistoricalTradeManagementContextLoader:
                 None,
                 total_observation_count,
                 cases,
+                tuple(
+                    sorted(
+                        management_outcomes,
+                        key=lambda item: item.earnings_date,
+                        reverse=True,
+                    )
+                ),
             )
 
         return HistoricalManagementContext(
@@ -130,6 +150,90 @@ class HistoricalTradeManagementContextLoader:
             average_remaining_move_percent=sum(remaining_moves) / count,
             total_observation_count=total_observation_count,
             comparable_cases=cases,
+            management_outcomes=tuple(
+                sorted(
+                    management_outcomes,
+                    key=lambda item: item.earnings_date,
+                    reverse=True,
+                )
+            ),
+        )
+
+    @staticmethod
+    def _build_management_outcomes(
+        *,
+        entry: EntryDecisionSnapshot,
+        report_date: date,
+        reference_price: float,
+        reaction_bar: DailyBar,
+        after_reaction: tuple[DailyBar, ...],
+        made_all_time_high: bool,
+    ) -> ManagementOutcomeCollection:
+        put_distance = entry.short_put_strike / entry.reference_price
+        call_distance = entry.short_call_strike / entry.reference_price
+        historical_put_strike = reference_price * put_distance
+        historical_call_strike = reference_price * call_distance
+
+        close_outcome = HistoricalTradeManagementContextLoader._management_outcome(
+            strategy_name="close_after_reaction",
+            entry_day=1,
+            exit_day=1,
+            exit_reason="reaction_day_close",
+            evaluation_bars=(reaction_bar,),
+            exit_close=reaction_bar.close,
+            reference_price=reference_price,
+            short_put_strike=historical_put_strike,
+            short_call_strike=historical_call_strike,
+            made_all_time_high=made_all_time_high,
+        )
+        hold_outcome = HistoricalTradeManagementContextLoader._management_outcome(
+            strategy_name="hold_to_friday",
+            entry_day=1,
+            exit_day=len(after_reaction),
+            exit_reason="earnings_week_end",
+            evaluation_bars=after_reaction,
+            exit_close=after_reaction[-1].close,
+            reference_price=reference_price,
+            short_put_strike=historical_put_strike,
+            short_call_strike=historical_call_strike,
+            made_all_time_high=made_all_time_high,
+        )
+        return ManagementOutcomeCollection(
+            symbol=entry.symbol,
+            earnings_date=report_date,
+            reference_price=reference_price,
+            outcomes=(close_outcome, hold_outcome),
+        )
+
+    @staticmethod
+    def _management_outcome(
+        *,
+        strategy_name: str,
+        entry_day: int,
+        exit_day: int,
+        exit_reason: str,
+        evaluation_bars: tuple[DailyBar, ...],
+        exit_close: float,
+        reference_price: float,
+        short_put_strike: float,
+        short_call_strike: float,
+        made_all_time_high: bool,
+    ) -> ManagementOutcome:
+        maximum_move = max(bar.high / reference_price - 1 for bar in evaluation_bars)
+        minimum_move = min(bar.low / reference_price - 1 for bar in evaluation_bars)
+        final_move = (exit_close / reference_price - 1) * 100
+        return ManagementOutcome(
+            strategy_name=strategy_name,
+            entry_day=entry_day,
+            exit_day=exit_day,
+            exit_reason=exit_reason,
+            max_adverse_move=minimum_move * 100,
+            max_favorable_move=maximum_move * 100,
+            finished_inside_strikes=(
+                short_put_strike <= exit_close <= short_call_strike
+            ),
+            all_time_high_after_entry=made_all_time_high,
+            final_move_percent=final_move,
         )
 
     def _reaction_bar(
