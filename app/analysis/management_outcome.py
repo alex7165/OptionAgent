@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.analysis.management_strategy_score import ManagementStrategyScore
+
 
 @dataclass(frozen=True, slots=True)
 class ManagementOutcome:
@@ -16,3 +18,4 @@ class ManagementOutcome:
     finished_inside_strikes: bool
     all_time_high_after_entry: bool
     final_move_percent: float
+    score: ManagementStrategyScore | None = None

@@ -5,6 +5,7 @@ from typing import Protocol
 
 from app.analysis.entry_decision_snapshot import EntryDecisionSnapshot
 from app.analysis.management_outcome import ManagementOutcome
+from app.analysis.management_strategy_score import ManagementStrategyScore
 from app.marketdata.price_history_provider import DailyBar
 
 
@@ -44,7 +45,7 @@ def build_management_outcome(
     minimum_move = min(bar.low / reference_price - 1 for bar in evaluation_bars)
     final_move = (exit_close / reference_price - 1) * 100
 
-    return ManagementOutcome(
+    outcome = ManagementOutcome(
         strategy_name=strategy_name,
         entry_day=entry_day,
         exit_day=exit_day,
@@ -56,6 +57,18 @@ def build_management_outcome(
         ),
         all_time_high_after_entry=made_all_time_high,
         final_move_percent=final_move,
+    )
+    return ManagementOutcome(
+        strategy_name=outcome.strategy_name,
+        entry_day=outcome.entry_day,
+        exit_day=outcome.exit_day,
+        exit_reason=outcome.exit_reason,
+        max_adverse_move=outcome.max_adverse_move,
+        max_favorable_move=outcome.max_favorable_move,
+        finished_inside_strikes=outcome.finished_inside_strikes,
+        all_time_high_after_entry=outcome.all_time_high_after_entry,
+        final_move_percent=outcome.final_move_percent,
+        score=ManagementStrategyScore.from_outcome(outcome),
     )
 
 
