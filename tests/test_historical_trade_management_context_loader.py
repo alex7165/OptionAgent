@@ -343,3 +343,41 @@ def test_management_outcomes_remain_available_below_minimum_observations():
     assert result.observation_count == 2
     assert result.probability_finish_back_inside is None
     assert len(result.management_outcomes) == 2
+
+
+def test_uses_injected_management_strategies():
+    class CustomStrategy:
+        def simulate(self, **kwargs):
+            from app.analysis.management_outcome import ManagementOutcome
+
+            return ManagementOutcome(
+                strategy_name="custom",
+                entry_day=1,
+                exit_day=1,
+                exit_reason="custom_exit",
+                max_adverse_move=0.0,
+                max_favorable_move=0.0,
+                finished_inside_strikes=True,
+                all_time_high_after_entry=False,
+                final_move_percent=0.0,
+            )
+
+    entry = EntryDecisionSnapshot(
+        "GS",
+        date(2026, 7, 13),
+        date(2026, 7, 14),
+        date(2026, 7, 17),
+        Strategy.SHORT_STRANGLE,
+        100,
+        90,
+        105,
+    )
+    result = HistoricalTradeManagementContextLoader(
+        EarningsDates(),
+        Prices(),
+        minimum_observations=1,
+        management_strategies=(CustomStrategy(),),
+    ).load(entry, date(2026, 7, 15), 109)
+
+    assert len(result.management_outcomes[0].outcomes) == 1
+    assert result.management_outcomes[0].outcomes[0].strategy_name == "custom"
