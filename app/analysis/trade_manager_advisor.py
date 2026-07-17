@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from math import isfinite
 from enum import StrEnum
 
@@ -17,12 +18,22 @@ class ManagementAction(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class ComparableManagementCase:
+    report_date: date
+    maximum_move_percent: float
+    maximum_move_trading_day: int
+    friday_close_move_percent: float
+    made_all_time_high: bool
+
+
+@dataclass(frozen=True, slots=True)
 class HistoricalManagementContext:
     observation_count: int
     probability_finish_back_inside: float | None
     probability_continue_higher: float | None
     average_remaining_move_percent: float | None
     total_observation_count: int | None = None
+    comparable_cases: tuple[ComparableManagementCase, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

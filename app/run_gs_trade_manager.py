@@ -120,6 +120,14 @@ def run(as_of_date: date, decision_file: Path, state_file: Path) -> int:
         )
     else:
         print(f"Historisch vergleichbare Fälle: {history.observation_count}")
+    for index, case in enumerate(history.comparable_cases, start=1):
+        print(
+            f"  {index}. {case.report_date} | "
+            f"Max. Move {case.maximum_move_percent:+.2f}% "
+            f"(Tag {case.maximum_move_trading_day}) | "
+            f"Freitag {case.friday_close_move_percent:+.2f}% | "
+            f"Allzeithoch: {'ja' if case.made_all_time_high else 'nein'}"
+        )
     print(
         f"TradeState: Hedge-Aktien {state.hedge_shares} | "
         f"bisheriger Aktien-Cashflow {state.realized_cash_flow:+.2f} USD"
