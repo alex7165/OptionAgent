@@ -127,7 +127,7 @@ class EarningsCrushAnalyzer:
             candidate.expected_move = expected_move
 
             strategy = self.strategy_selector.select(
-                defined_risk=True,
+                defined_risk=False,
             )
 
             historical_inputs = self._load_historical_inputs(
@@ -222,8 +222,6 @@ class EarningsCrushAnalyzer:
             candidates.append(candidate)
 
         return candidates
-
-
 
     def _select_strikes_with_details(self, **kwargs):
         detailed_selector = getattr(
