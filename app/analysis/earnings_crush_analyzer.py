@@ -15,6 +15,8 @@ from app.analysis.historical_strike_selector import (
 from app.analysis.liquidity_analyzer import LiquidityAnalyzer
 from app.analysis.liquidity_optimizer import LiquidityOptimizer
 from app.analysis.option_data import OptionData
+from app.analysis.strategy_decision import StrategyDecisionService
+from app.analysis.strategy import Strategy
 from app.analysis.strategy_selector import (
     StrategySelector,
     StrategyStrikeSelectionResult,
@@ -65,6 +67,7 @@ class EarningsCrushAnalyzer:
         )
         self.expected_move_analyzer = ExpectedMoveAnalyzer()
         self.strategy_selector = strategy_selector or StrategySelector()
+        self.strategy_decision_service = StrategyDecisionService()
         self.historical_inputs_loader = historical_inputs_loader
         self.liquidity_analyzer = LiquidityAnalyzer()
         self.liquidity_optimizer = LiquidityOptimizer()
@@ -126,45 +129,44 @@ class EarningsCrushAnalyzer:
 
             candidate.expected_move = expected_move
 
-            strategy = self.strategy_selector.select(
-                defined_risk=False,
-            )
-
             historical_inputs = self._load_historical_inputs(
                 event.symbol
             )
 
-            if historical_inputs is None:
-                selection_result = (
-                    self._select_strikes_with_details(
-                        chain=chain,
-                        underlying_price=snapshot.quote.price,
-                        expected_move=expected_move,
-                        strategy=strategy,
-                    )
+            selection_kwargs = {
+                "chain": chain,
+                "underlying_price": snapshot.quote.price,
+                "expected_move": expected_move,
+            }
+            if historical_inputs is not None:
+                selection_kwargs.update(
+                    price_analyses=historical_inputs.price_analyses,
+                    exit_trading_day_index=(
+                        historical_inputs.exit_trading_day_index
+                    ),
+                    call_thresholds=historical_inputs.call_thresholds,
+                    put_thresholds=historical_inputs.put_thresholds,
+                    policy=historical_inputs.policy,
                 )
-            else:
-                selection_result = (
-                    self._select_strikes_with_details(
-                        chain=chain,
-                        underlying_price=snapshot.quote.price,
-                        expected_move=expected_move,
-                        strategy=strategy,
-                        price_analyses=(
-                            historical_inputs.price_analyses
-                        ),
-                        exit_trading_day_index=(
-                            historical_inputs.exit_trading_day_index
-                        ),
-                        call_thresholds=(
-                            historical_inputs.call_thresholds
-                        ),
-                        put_thresholds=(
-                            historical_inputs.put_thresholds
-                        ),
-                        policy=historical_inputs.policy,
-                    )
+
+            short_result = self._select_strikes_with_details(
+                **selection_kwargs,
+                strategy=Strategy.SHORT_STRANGLE,
+            )
+            selection_result = short_result
+
+            if short_result.historical_result is not None:
+                condor_result = self._select_strikes_with_details(
+                    **selection_kwargs,
+                    strategy=Strategy.IRON_CONDOR,
                 )
+                selected_strategy = self.strategy_decision_service.select(
+                    short_strangle=short_result.strike_selection,
+                    iron_condor=condor_result.strike_selection,
+                    historical_result=short_result.historical_result,
+                )
+                if selected_strategy is Strategy.IRON_CONDOR:
+                    selection_result = condor_result
 
             selection = selection_result.strike_selection
             candidate.strike_selection_before_liquidity = selection
@@ -222,6 +224,8 @@ class EarningsCrushAnalyzer:
             candidates.append(candidate)
 
         return candidates
+
+
 
     def _select_strikes_with_details(self, **kwargs):
         detailed_selector = getattr(

@@ -44,15 +44,6 @@ class StrategySelector:
         self.strike_selector = strike_selector or StrikeSelector()
         self.historical_adapter = historical_adapter
 
-    def select(
-        self,
-        defined_risk: bool,
-    ) -> Strategy:
-        if defined_risk:
-            return Strategy.IRON_CONDOR
-
-        return Strategy.SHORT_STRANGLE
-
     def select_strikes(
         self,
         chain: ExpirationChain,

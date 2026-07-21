@@ -20,10 +20,6 @@ class RecordingStrategySelector:
         self.result = result
         self.calls: list[dict[str, object]] = []
 
-    def select(self, defined_risk: bool) -> Strategy:
-        assert defined_risk is True
-        return Strategy.IRON_CONDOR
-
     def select_strikes(self, **kwargs: object) -> StrikeSelection:
         self.calls.append(kwargs)
         return self.result
@@ -117,7 +113,7 @@ def test_uses_expected_move_selection_without_historical_loader() -> None:
     candidate = analyzer.create_candidates([make_event()])[0]
 
     assert candidate.strike_selection is selector.result
-    assert selector.calls[0]["strategy"] is Strategy.IRON_CONDOR
+    assert selector.calls[0]["strategy"] is Strategy.SHORT_STRANGLE
     assert "price_analyses" not in selector.calls[0]
 
 
