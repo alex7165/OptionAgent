@@ -86,7 +86,16 @@ class StrategySelector:
         put_thresholds: tuple[float, ...] | None = None,
         policy: HistoricalStrikeSelectionPolicy | None = None,
     ) -> StrategyStrikeSelectionResult:
-        if self.historical_adapter is None:
+        historical_inputs_complete = (
+            self.historical_adapter is not None
+            and bool(price_analyses)
+            and exit_trading_day_index is not None
+            and call_thresholds is not None
+            and put_thresholds is not None
+            and policy is not None
+        )
+
+        if not historical_inputs_complete:
             selection = self.strike_selector.select_by_expected_move(
                 chain=chain,
                 expected_move=expected_move,
@@ -95,28 +104,6 @@ class StrategySelector:
             return StrategyStrikeSelectionResult(
                 strike_selection=selection,
                 source=StrikeSelectionSource.EXPECTED_MOVE,
-            )
-
-        if price_analyses is None:
-            raise ValueError(
-                "price_analyses are required when historical_adapter is set"
-            )
-        if exit_trading_day_index is None:
-            raise ValueError(
-                "exit_trading_day_index is required when "
-                "historical_adapter is set"
-            )
-        if call_thresholds is None:
-            raise ValueError(
-                "call_thresholds are required when historical_adapter is set"
-            )
-        if put_thresholds is None:
-            raise ValueError(
-                "put_thresholds are required when historical_adapter is set"
-            )
-        if policy is None:
-            raise ValueError(
-                "policy is required when historical_adapter is set"
             )
 
         result = self.historical_adapter.select(

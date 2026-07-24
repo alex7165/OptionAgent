@@ -169,3 +169,73 @@ def test_uses_historical_adapter_when_present() -> None:
             "strategy": Strategy.IRON_CONDOR,
         }
     ]
+
+
+def test_falls_back_to_expected_move_when_historical_data_is_missing() -> None:
+    chain = make_chain()
+    expected_move = make_expected_move()
+    fallback_selection = make_strike_selection(
+        strategy=Strategy.SHORT_STRANGLE
+    )
+    fallback_selector = RecordingStrikeSelector(
+        result=fallback_selection
+    )
+    historical_adapter = RecordingHistoricalAdapter(
+        strike_selection=make_strike_selection()
+    )
+    selector = StrategySelector(
+        strike_selector=fallback_selector,
+        historical_adapter=historical_adapter,
+    )
+
+    result = selector.select_strikes_with_details(
+        chain=chain,
+        underlying_price=200.0,
+        expected_move=expected_move,
+        strategy=Strategy.SHORT_STRANGLE,
+        price_analyses=None,
+    )
+
+    assert result.strike_selection is fallback_selection
+    assert result.source.value == "expected_move"
+    assert historical_adapter.calls == []
+    assert fallback_selector.calls == [
+        {
+            "chain": chain,
+            "expected_move": expected_move,
+            "strategy": Strategy.SHORT_STRANGLE,
+        }
+    ]
+
+
+def test_falls_back_to_expected_move_when_historical_data_is_empty() -> None:
+    chain = make_chain()
+    expected_move = make_expected_move()
+    fallback_selection = make_strike_selection()
+    fallback_selector = RecordingStrikeSelector(
+        result=fallback_selection
+    )
+    historical_adapter = RecordingHistoricalAdapter(
+        strike_selection=make_strike_selection()
+    )
+    selector = StrategySelector(
+        strike_selector=fallback_selector,
+        historical_adapter=historical_adapter,
+    )
+
+    result = selector.select_strikes_with_details(
+        chain=chain,
+        underlying_price=200.0,
+        expected_move=expected_move,
+        price_analyses=(),
+        exit_trading_day_index=2,
+        call_thresholds=(7.5, 10.0),
+        put_thresholds=(-7.5, -10.0),
+        policy=HistoricalStrikeSelectionPolicy(
+            max_finish_outside_probability=0.10,
+        ),
+    )
+
+    assert result.strike_selection is fallback_selection
+    assert result.source.value == "expected_move"
+    assert historical_adapter.calls == []

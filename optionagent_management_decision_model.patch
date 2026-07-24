@@ -1,0 +1,208 @@
+diff --git a/app/analysis/management_action.py b/app/analysis/management_action.py
+new file mode 100644
+index 0000000..9dea81d
+--- /dev/null
++++ b/app/analysis/management_action.py
+@@ -0,0 +1,39 @@
++from __future__ import annotations
++
++from enum import StrEnum
++
++
++class ThreatenedSide(StrEnum):
++    PUT = "put"
++    CALL = "call"
++
++
++class ManagementAction(StrEnum):
++    """Supported actions after a short strike is threatened or violated."""
++
++    HOLD = "hold"
++    CLOSE = "close"
++    ROLL_CALL = "roll_call"
++    BUY_STOCK_HEDGE = "buy_stock_hedge"
++    HOLD_FOR_ASSIGNMENT = "hold_for_assignment"
++    ROLL_PUT = "roll_put"
++    ASSIGN_AND_SELL_COVERED_CALL = "assign_and_sell_covered_call"
++
++    @classmethod
++    def allowed_for_side(
++        cls,
++        side: ThreatenedSide,
++    ) -> tuple[ManagementAction, ...]:
++        if side is ThreatenedSide.CALL:
++            return (
++                cls.HOLD,
++                cls.ROLL_CALL,
++                cls.BUY_STOCK_HEDGE,
++                cls.CLOSE,
++            )
++        return (
++            cls.HOLD_FOR_ASSIGNMENT,
++            cls.ROLL_PUT,
++            cls.ASSIGN_AND_SELL_COVERED_CALL,
++            cls.CLOSE,
++        )
+diff --git a/app/analysis/management_decision_context.py b/app/analysis/management_decision_context.py
+new file mode 100644
+index 0000000..1e7baae
+--- /dev/null
++++ b/app/analysis/management_decision_context.py
+@@ -0,0 +1,67 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++from datetime import date
++
++from app.analysis.management_action import ManagementAction, ThreatenedSide
++
++
++@dataclass(frozen=True, slots=True)
++class ManagementDecisionContext:
++    """Information known when a management action is considered.
++
++    Future outcome data deliberately does not belong in this object.
++    """
++
++    decision_date: date
++    trading_day_index: int
++    threatened_side: ThreatenedSide
++    action: ManagementAction
++    underlying_price: float
++    short_strike: float
++    days_to_expiration: int
++    short_option_delta: float | None = None
++    stock_hedge_shares_per_contract: int | None = None
++
++    def __post_init__(self) -> None:
++        if self.trading_day_index <= 0:
++            raise ValueError("trading_day_index must be greater than zero")
++        if self.underlying_price <= 0:
++            raise ValueError("underlying_price must be greater than zero")
++        if self.short_strike <= 0:
++            raise ValueError("short_strike must be greater than zero")
++        if self.days_to_expiration < 0:
++            raise ValueError("days_to_expiration must not be negative")
++        if self.action not in ManagementAction.allowed_for_side(
++            self.threatened_side
++        ):
++            raise ValueError(
++                f"action {self.action.value} is not valid for "
++                f"{self.threatened_side.value} side"
++            )
++        if self.short_option_delta is not None and not (
++            0.0 <= abs(self.short_option_delta) <= 1.0
++        ):
++            raise ValueError("short_option_delta absolute value must be <= 1")
++
++        if self.action is ManagementAction.BUY_STOCK_HEDGE:
++            if self.threatened_side is not ThreatenedSide.CALL:
++                raise ValueError(
++                    "buy_stock_hedge is only valid for the call side"
++                )
++            if self.short_option_delta is None:
++                raise ValueError(
++                    "short_option_delta is required for buy_stock_hedge"
++                )
++            expected_shares = round(abs(self.short_option_delta) * 100)
++            if self.stock_hedge_shares_per_contract is None:
++                object.__setattr__(
++                    self,
++                    "stock_hedge_shares_per_contract",
++                    expected_shares,
++                )
++        elif self.stock_hedge_shares_per_contract is not None:
++            raise ValueError(
++                "stock_hedge_shares_per_contract is only valid for "
++                "buy_stock_hedge"
++            )
+diff --git a/tests/test_management_action.py b/tests/test_management_action.py
+new file mode 100644
+index 0000000..13ce597
+--- /dev/null
++++ b/tests/test_management_action.py
+@@ -0,0 +1,16 @@
++from app.analysis.management_action import ManagementAction, ThreatenedSide
++
++
++def test_call_side_actions_include_stock_hedge_but_not_assignment() -> None:
++    actions = ManagementAction.allowed_for_side(ThreatenedSide.CALL)
++
++    assert ManagementAction.BUY_STOCK_HEDGE in actions
++    assert ManagementAction.ASSIGN_AND_SELL_COVERED_CALL not in actions
++
++
++def test_put_side_actions_include_assignment_but_not_stock_sale() -> None:
++    actions = ManagementAction.allowed_for_side(ThreatenedSide.PUT)
++
++    assert ManagementAction.HOLD_FOR_ASSIGNMENT in actions
++    assert ManagementAction.ASSIGN_AND_SELL_COVERED_CALL in actions
++    assert ManagementAction.BUY_STOCK_HEDGE not in actions
+diff --git a/tests/test_management_decision_context.py b/tests/test_management_decision_context.py
+new file mode 100644
+index 0000000..938af20
+--- /dev/null
++++ b/tests/test_management_decision_context.py
+@@ -0,0 +1,62 @@
++from datetime import date
++
++import pytest
++
++from app.analysis.management_action import ManagementAction, ThreatenedSide
++from app.analysis.management_decision_context import ManagementDecisionContext
++
++
++def test_calculates_call_stock_hedge_from_delta() -> None:
++    context = ManagementDecisionContext(
++        decision_date=date(2026, 7, 23),
++        trading_day_index=1,
++        threatened_side=ThreatenedSide.CALL,
++        action=ManagementAction.BUY_STOCK_HEDGE,
++        underlying_price=568.59,
++        short_strike=545.0,
++        days_to_expiration=1,
++        short_option_delta=0.72,
++    )
++
++    assert context.stock_hedge_shares_per_contract == 72
++
++
++def test_accepts_assignment_and_covered_call_for_put_side() -> None:
++    context = ManagementDecisionContext(
++        decision_date=date(2026, 7, 23),
++        trading_day_index=1,
++        threatened_side=ThreatenedSide.PUT,
++        action=ManagementAction.ASSIGN_AND_SELL_COVERED_CALL,
++        underlying_price=11.44,
++        short_strike=13.5,
++        days_to_expiration=1,
++    )
++
++    assert context.action is ManagementAction.ASSIGN_AND_SELL_COVERED_CALL
++
++
++def test_rejects_stock_hedge_for_put_side() -> None:
++    with pytest.raises(ValueError, match="not valid for put side"):
++        ManagementDecisionContext(
++            decision_date=date(2026, 7, 23),
++            trading_day_index=1,
++            threatened_side=ThreatenedSide.PUT,
++            action=ManagementAction.BUY_STOCK_HEDGE,
++            underlying_price=11.44,
++            short_strike=13.5,
++            days_to_expiration=1,
++            short_option_delta=0.70,
++        )
++
++
++def test_rejects_assignment_action_for_call_side() -> None:
++    with pytest.raises(ValueError, match="not valid for call side"):
++        ManagementDecisionContext(
++            decision_date=date(2026, 7, 23),
++            trading_day_index=1,
++            threatened_side=ThreatenedSide.CALL,
++            action=ManagementAction.HOLD_FOR_ASSIGNMENT,
++            underlying_price=568.59,
++            short_strike=545.0,
++            days_to_expiration=1,
++        )

@@ -1,0 +1,253 @@
+diff --git a/app/analysis/trade_excel_snapshot_loader.py b/app/analysis/trade_excel_snapshot_loader.py
+new file mode 100644
+index 0000000..95ece53
+--- /dev/null
++++ b/app/analysis/trade_excel_snapshot_loader.py
+@@ -0,0 +1,85 @@
++from __future__ import annotations
++
++from datetime import date, timedelta
++from pathlib import Path
++import re
++
++from openpyxl import load_workbook
++
++from app.analysis.daily_trade_window_selector import DailyTradeWindowSelector
++from app.analysis.strategy import Strategy
++from app.analysis.trade_snapshot_review import TradeSnapshot
++from app.marketdata.savvytrader_earnings_calendar_provider import (
++    SavvyTraderEarningsCalendarProvider,
++)
++
++
++class TradeExcelSnapshotLoader:
++    """Convert daily trade exports into reviewable snapshots."""
++
++    DATE_PATTERN = re.compile(r"(\d{4}-\d{2}-\d{2})")
++
++    def __init__(self, calendar_provider=None) -> None:
++        self.calendar_provider = (
++            calendar_provider or SavvyTraderEarningsCalendarProvider()
++        )
++        self.window_selector = DailyTradeWindowSelector()
++
++    def load(self, paths: tuple[str | Path, ...]) -> tuple[TradeSnapshot, ...]:
++        snapshots: list[TradeSnapshot] = []
++        for path in paths:
++            source = Path(path)
++            trade_date = self._trade_date(source)
++            events = self._events_for_trade_date(trade_date)
++            event_by_symbol = {event.symbol.upper(): event for event in events}
++
++            workbook = load_workbook(source, read_only=True, data_only=True)
++            worksheet = workbook.active
++            rows = worksheet.iter_rows(values_only=True)
++            headers = next(rows, None)
++            if not headers:
++                continue
++            indexes = {str(value): index for index, value in enumerate(headers)}
++
++            for row in rows:
++                symbol = str(row[indexes["Aktie"]] or "").strip().upper()
++                if not symbol:
++                    continue
++                event = event_by_symbol.get(symbol)
++                if event is None:
++                    raise ValueError(
++                        f"No matching earnings event for {symbol} on {trade_date}"
++                    )
++                report_date = event.report_date
++                snapshots.append(
++                    TradeSnapshot(
++                        symbol=symbol,
++                        decision_date=trade_date,
++                        report_date=report_date,
++                        expiration=self._friday_of_week(report_date),
++                        strategy=Strategy(str(row[indexes["Strategie"]])),
++                        reference_price=float(row[indexes["Kurs"]]),
++                        short_put_strike=float(row[indexes["ShortPutStrike"]]),
++                        short_call_strike=float(row[indexes["ShortCallStrike"]]),
++                    )
++                )
++        return tuple(snapshots)
++
++    def _events_for_trade_date(self, trade_date: date):
++        next_date = self.window_selector.next_trading_weekday(trade_date)
++        events = self.calendar_provider.get_events(
++            trade_date,
++            next_date + timedelta(days=1),
++        )
++        return self.window_selector.select(events, trade_date).events
++
++    @classmethod
++    def _trade_date(cls, path: Path) -> date:
++        match = cls.DATE_PATTERN.search(path.name)
++        if match is None:
++            raise ValueError(f"Could not determine trade date from {path.name}")
++        return date.fromisoformat(match.group(1))
++
++    @staticmethod
++    def _friday_of_week(value: date) -> date:
++        return value + timedelta(days=4 - value.weekday())
+diff --git a/app/run_weekly_trade_review.py b/app/run_weekly_trade_review.py
+new file mode 100644
+index 0000000..c638056
+--- /dev/null
++++ b/app/run_weekly_trade_review.py
+@@ -0,0 +1,86 @@
++from __future__ import annotations
++
++import argparse
++from datetime import date
++from pathlib import Path
++
++from app.analysis.trade_excel_snapshot_loader import TradeExcelSnapshotLoader
++from app.analysis.trade_snapshot_review import TradeSnapshotReviewRunner
++from app.marketdata.yahoo_price_history_provider import YahooPriceHistoryProvider
++
++
++def run(paths: tuple[Path, ...], end_date: date) -> int:
++    snapshots = TradeExcelSnapshotLoader().load(paths)
++    reviews = TradeSnapshotReviewRunner(YahooPriceHistoryProvider()).run(
++        snapshots,
++        end_date=end_date,
++    )
++
++    print(f"Excel-Dateien: {len(paths)}")
++    print(f"Trades: {len(snapshots)}")
++    print(f"Kursverlauf bis: {end_date.isoformat()}")
++
++    reviewed = {review.snapshot.symbol for review in reviews}
++    for snapshot in snapshots:
++        if snapshot.symbol not in reviewed:
++            print(f"{snapshot.symbol:<6} KEINE KURSDATEN")
++
++    for review in reviews:
++        snapshot = review.snapshot
++        final = review.outcomes[-1]
++        wrong = not final.finished_inside_short_strikes
++        touched = any(
++            outcome.put_touched or outcome.call_touched
++            for outcome in review.outcomes
++        )
++        if not wrong and not touched:
++            continue
++
++        status = "VERLETZT" if wrong else "BERÜHRT, AM ENDE INNERHALB"
++        print("\n" + "=" * 76)
++        print(
++            f"{snapshot.symbol} | {status} | Referenz {snapshot.reference_price:.2f} | "
++            f"Put {snapshot.short_put_strike:g} | Call {snapshot.short_call_strike:g}"
++        )
++        for outcome in review.outcomes:
++            touches = []
++            if outcome.put_touched:
++                touches.append("Put-Touch")
++            if outcome.call_touched:
++                touches.append("Call-Touch")
++            print(
++                f"Tag {outcome.exit_trading_day_index}: {outcome.exit_date} "
++                f"Close {outcome.exit_close:.2f} | "
++                f"{'INNERHALB' if outcome.finished_inside_short_strikes else 'VERLETZT'} | "
++                f"{', '.join(touches) if touches else 'kein Touch'} | "
++                f"MAE {outcome.max_adverse_move_percent:.2f}% | "
++                f"MFE {outcome.max_favorable_move_percent:.2f}%"
++            )
++
++        repair = review.repair
++        if repair.triggered:
++            held = not bool(repair.repaired_strike_finished_outside)
++            print(
++                f"Reparatur: Tag {repair.trigger_day_index}, "
++                f"{repair.threatened_side.value}-Seite, "
++                f"Strike {repair.original_strike:.2f} → {repair.repaired_strike:.2f}, "
++                f"bis Freitag {'gehalten' if held else 'verletzt'}"
++            )
++        else:
++            print("Reparatur: nicht ausgelöst")
++
++    return 0
++
++
++def main() -> None:
++    parser = argparse.ArgumentParser(
++        description="Review daily trade Excel exports and simulate repairs."
++    )
++    parser.add_argument("files", nargs="+", type=Path)
++    parser.add_argument("--end-date", type=date.fromisoformat, required=True)
++    args = parser.parse_args()
++    raise SystemExit(run(tuple(args.files), args.end_date))
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/tests/test_trade_excel_snapshot_loader.py b/tests/test_trade_excel_snapshot_loader.py
+new file mode 100644
+index 0000000..ee124e1
+--- /dev/null
++++ b/tests/test_trade_excel_snapshot_loader.py
+@@ -0,0 +1,64 @@
++from datetime import date
++
++from openpyxl import Workbook
++
++from app.analysis.trade_excel_snapshot_loader import TradeExcelSnapshotLoader
++from app.marketdata.models import EarningsEvent
++
++
++class DummyCalendarProvider:
++    def get_events(self, start_date, end_date):
++        return [
++            EarningsEvent(
++                symbol="TEST",
++                report_date=date(2026, 7, 22),
++                timing="after market close",
++            )
++        ]
++
++
++def test_loads_trade_snapshot_from_excel(tmp_path):
++    path = tmp_path / "daily_trades_2026-07-22.xlsx"
++    workbook = Workbook()
++    sheet = workbook.active
++    sheet.append(
++        [
++            "Aktie",
++            "Kurs",
++            "Strategie",
++            "ShortPutStrike",
++            "ShortCallStrike",
++        ]
++    )
++    sheet.append(["TEST", 100, "Short Strangle", 95, 105])
++    workbook.save(path)
++
++    result = TradeExcelSnapshotLoader(DummyCalendarProvider()).load((path,))
++
++    assert len(result) == 1
++    assert result[0].symbol == "TEST"
++    assert result[0].decision_date == date(2026, 7, 22)
++    assert result[0].report_date == date(2026, 7, 22)
++    assert result[0].expiration == date(2026, 7, 24)
++    assert result[0].short_put_strike == 95
++    assert result[0].short_call_strike == 105
++
++
++def test_skips_empty_excel(tmp_path):
++    path = tmp_path / "daily_trades_2026-07-23.xlsx"
++    workbook = Workbook()
++    sheet = workbook.active
++    sheet.append(
++        [
++            "Aktie",
++            "Kurs",
++            "Strategie",
++            "ShortPutStrike",
++            "ShortCallStrike",
++        ]
++    )
++    workbook.save(path)
++
++    result = TradeExcelSnapshotLoader(DummyCalendarProvider()).load((path,))
++
++    assert result == ()

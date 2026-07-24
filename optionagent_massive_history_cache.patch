@@ -1,0 +1,259 @@
+diff --git a/app/marketdata/massive_price_history_provider.py b/app/marketdata/massive_price_history_provider.py
+index 7e6f11a..279e498 100644
+--- a/app/marketdata/massive_price_history_provider.py
++++ b/app/marketdata/massive_price_history_provider.py
+@@ -1,4 +1,6 @@
++import json
+ from datetime import date, datetime, timezone
++from pathlib import Path
+ from typing import Any
+ 
+ from app.marketdata.massive_client import MassiveClient
+@@ -10,12 +12,16 @@ from app.marketdata.price_history_provider import (
+ 
+ class MassivePriceHistoryProvider(PriceHistoryProvider):
+ 
++    DEFAULT_CACHE_DIR = Path("data/history_cache/massive")
++
+     def __init__(
+         self,
+         client: MassiveClient | None = None,
+         api_key: str | None = None,
++        cache_dir: str | Path | None = None,
+     ) -> None:
+         self.client = client or MassiveClient(api_key=api_key)
++        self.cache_dir = Path(cache_dir or self.DEFAULT_CACHE_DIR)
+ 
+     def get_daily_bars(
+         self,
+@@ -33,6 +39,16 @@ class MassivePriceHistoryProvider(PriceHistoryProvider):
+                 "start_date must be before or equal to end_date"
+             )
+ 
++        cache_path = self._cache_path(
++            symbol=normalized_symbol,
++            start_date=start_date,
++            end_date=end_date,
++        )
++        cached_payload = self._read_cache(cache_path)
++
++        if cached_payload is not None:
++            return self._parse_payload(cached_payload)
++
+         path = (
+             f"/v2/aggs/ticker/{normalized_symbol}/range/1/day/"
+             f"{start_date.isoformat()}/{end_date.isoformat()}"
+@@ -47,6 +63,54 @@ class MassivePriceHistoryProvider(PriceHistoryProvider):
+             },
+         )
+ 
++        bars = self._parse_payload(payload)
++        self._write_cache(cache_path, payload)
++        return bars
++
++    def _cache_path(
++        self,
++        symbol: str,
++        start_date: date,
++        end_date: date,
++    ) -> Path:
++        filename = (
++            f"{symbol}_{start_date.isoformat()}_"
++            f"{end_date.isoformat()}.json"
++        )
++        return self.cache_dir / filename
++
++    @staticmethod
++    def _read_cache(cache_path: Path) -> dict[str, Any] | None:
++        if not cache_path.exists():
++            return None
++
++        try:
++            payload = json.loads(cache_path.read_text(encoding="utf-8"))
++        except (OSError, json.JSONDecodeError):
++            return None
++
++        if not isinstance(payload, dict):
++            return None
++
++        return payload
++
++    @staticmethod
++    def _write_cache(
++        cache_path: Path,
++        payload: dict[str, Any],
++    ) -> None:
++        cache_path.parent.mkdir(parents=True, exist_ok=True)
++        temporary_path = cache_path.with_suffix(".tmp")
++        temporary_path.write_text(
++            json.dumps(payload, ensure_ascii=False, sort_keys=True),
++            encoding="utf-8",
++        )
++        temporary_path.replace(cache_path)
++
++    def _parse_payload(
++        self,
++        payload: dict[str, Any],
++    ) -> tuple[DailyBar, ...]:
+         results = payload.get("results", [])
+ 
+         if not isinstance(results, list):
+@@ -77,4 +141,4 @@ class MassivePriceHistoryProvider(PriceHistoryProvider):
+             low=float(item["l"]),
+             close=float(item["c"]),
+             volume=int(item["v"]),
+-        )
+\ No newline at end of file
++        )
+diff --git a/tests/test_massive_price_history_provider.py b/tests/test_massive_price_history_provider.py
+index de64a9f..01f57b2 100644
+--- a/tests/test_massive_price_history_provider.py
++++ b/tests/test_massive_price_history_provider.py
+@@ -28,7 +28,7 @@ class DummyMassiveClient:
+         return self.payload
+ 
+ 
+-def test_get_daily_bars_returns_normalized_history() -> None:
++def test_get_daily_bars_returns_normalized_history(tmp_path) -> None:
+     client = DummyMassiveClient(
+         {
+             "adjusted": False,
+@@ -54,7 +54,7 @@ def test_get_daily_bars_returns_normalized_history() -> None:
+         }
+     )
+ 
+-    provider = MassivePriceHistoryProvider(client=client)
++    provider = MassivePriceHistoryProvider(client=client, cache_dir=tmp_path)
+ 
+     bars = provider.get_daily_bars(
+         symbol=" nvda ",
+@@ -89,7 +89,7 @@ def test_get_daily_bars_returns_normalized_history() -> None:
+     assert bars[1].close == 187.0
+ 
+ 
+-def test_get_daily_bars_returns_empty_tuple_without_results() -> None:
++def test_get_daily_bars_returns_empty_tuple_without_results(tmp_path) -> None:
+     client = DummyMassiveClient(
+         {
+             "status": "OK",
+@@ -97,7 +97,7 @@ def test_get_daily_bars_returns_empty_tuple_without_results() -> None:
+         }
+     )
+ 
+-    provider = MassivePriceHistoryProvider(client=client)
++    provider = MassivePriceHistoryProvider(client=client, cache_dir=tmp_path)
+ 
+     bars = provider.get_daily_bars(
+         symbol="NVDA",
+@@ -108,9 +108,10 @@ def test_get_daily_bars_returns_empty_tuple_without_results() -> None:
+     assert bars == ()
+ 
+ 
+-def test_rejects_empty_symbol() -> None:
++def test_rejects_empty_symbol(tmp_path) -> None:
+     provider = MassivePriceHistoryProvider(
+-        client=DummyMassiveClient({})
++        client=DummyMassiveClient({}),
++        cache_dir=tmp_path,
+     )
+ 
+     with pytest.raises(
+@@ -124,9 +125,10 @@ def test_rejects_empty_symbol() -> None:
+         )
+ 
+ 
+-def test_rejects_invalid_date_range() -> None:
++def test_rejects_invalid_date_range(tmp_path) -> None:
+     provider = MassivePriceHistoryProvider(
+-        client=DummyMassiveClient({})
++        client=DummyMassiveClient({}),
++        cache_dir=tmp_path,
+     )
+ 
+     with pytest.raises(
+@@ -140,14 +142,15 @@ def test_rejects_invalid_date_range() -> None:
+         )
+ 
+ 
+-def test_rejects_invalid_results() -> None:
++def test_rejects_invalid_results(tmp_path) -> None:
+     provider = MassivePriceHistoryProvider(
+         client=DummyMassiveClient(
+             {
+                 "status": "OK",
+                 "results": {},
+             }
+-        )
++        ),
++        cache_dir=tmp_path,
+     )
+ 
+     with pytest.raises(
+@@ -158,4 +161,65 @@ def test_rejects_invalid_results() -> None:
+             symbol="NVDA",
+             start_date=date(2026, 7, 9),
+             end_date=date(2026, 7, 10),
+-        )
+\ No newline at end of file
++        )
++
++def test_get_daily_bars_writes_and_reuses_cache(tmp_path) -> None:
++    payload = {
++        "status": "OK",
++        "results": [
++            {
++                "o": 180.0,
++                "h": 185.0,
++                "l": 178.0,
++                "c": 183.5,
++                "v": 42_000_000,
++                "t": 1783555200000,
++            }
++        ],
++    }
++    client = DummyMassiveClient(payload)
++    provider = MassivePriceHistoryProvider(
++        client=client,
++        cache_dir=tmp_path,
++    )
++
++    first_bars = provider.get_daily_bars(
++        symbol="NVDA",
++        start_date=date(2026, 7, 9),
++        end_date=date(2026, 7, 10),
++    )
++    second_bars = provider.get_daily_bars(
++        symbol="nvda",
++        start_date=date(2026, 7, 9),
++        end_date=date(2026, 7, 10),
++    )
++
++    assert first_bars == second_bars
++    assert len(client.calls) == 1
++    assert (
++        tmp_path / "NVDA_2026-07-09_2026-07-10.json"
++    ).exists()
++
++
++def test_get_daily_bars_ignores_invalid_cache(tmp_path) -> None:
++    cache_path = tmp_path / "NVDA_2026-07-09_2026-07-10.json"
++    cache_path.write_text("not valid json", encoding="utf-8")
++    client = DummyMassiveClient(
++        {
++            "status": "OK",
++            "results": [],
++        }
++    )
++    provider = MassivePriceHistoryProvider(
++        client=client,
++        cache_dir=tmp_path,
++    )
++
++    bars = provider.get_daily_bars(
++        symbol="NVDA",
++        start_date=date(2026, 7, 9),
++        end_date=date(2026, 7, 10),
++    )
++
++    assert bars == ()
++    assert len(client.calls) == 1

@@ -6,6 +6,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+
 from app.analysis.daily_trade_window_selector import DailyTradeWindowSelector
 from app.analysis.earnings_crush_analyzer_factory import EarningsCrushAnalyzerFactory
 from app.analysis.trade_exporter import TradeExporter
@@ -26,6 +28,8 @@ def run_daily(
     market_data=None,
     analyzer_factory=None,
 ):
+    load_dotenv()
+
     selector = DailyTradeWindowSelector()
     next_date = selector.next_trading_weekday(trade_date)
     calendar_provider = calendar_provider or SavvyTraderEarningsCalendarProvider()
@@ -62,6 +66,13 @@ def run_daily(
     market_data = market_data or build_market_data()
     analyzer_factory = analyzer_factory or EarningsCrushAnalyzerFactory()
     analyzer = analyzer_factory.create(market_data)
+    historical_enabled = (
+        getattr(analyzer, "historical_inputs_loader", None) is not None
+    )
+    print(
+        "Historische Auswahl: "
+        + ("aktiv" if historical_enabled else "nicht aktiv")
+    )
     candidates = []
     technical_errors: list[tuple[str, str]] = []
 

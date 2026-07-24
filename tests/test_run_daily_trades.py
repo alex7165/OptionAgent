@@ -129,3 +129,59 @@ def test_technical_404_is_reported_as_missing_option_chain() -> None:
     error.response = Response()
 
     assert _technical_error_reason(error) == "option_chain_not_available"
+
+
+def test_run_daily_loads_dotenv_before_creating_analyzer(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    calls = []
+    analyzer = Analyzer()
+
+    monkeypatch.setattr(
+        "app.run_daily_trades.load_dotenv",
+        lambda: calls.append("dotenv"),
+    )
+    monkeypatch.setattr(
+        "app.run_daily_trades.TradeExporter.export_excel",
+        lambda self, candidates, output_path: None,
+    )
+
+    class RecordingFactory(Factory):
+        def create(self, market_data):
+            calls.append("factory")
+            return super().create(market_data)
+
+    run_daily(
+        trade_date=date(2026, 7, 15),
+        output_path=Path(tmp_path) / "daily.xlsx",
+        calendar_provider=CalendarProvider(),
+        market_data=object(),
+        analyzer_factory=RecordingFactory(analyzer),
+    )
+
+    assert calls == ["dotenv", "factory"]
+
+
+def test_run_daily_reports_historical_selection_status(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    analyzer = Analyzer()
+    analyzer.historical_inputs_loader = object()
+
+    monkeypatch.setattr(
+        "app.run_daily_trades.TradeExporter.export_excel",
+        lambda self, candidates, output_path: None,
+    )
+
+    run_daily(
+        trade_date=date(2026, 7, 15),
+        output_path=Path(tmp_path) / "daily.xlsx",
+        calendar_provider=CalendarProvider(),
+        market_data=object(),
+        analyzer_factory=Factory(analyzer),
+    )
+
+    assert "Historische Auswahl: aktiv" in capsys.readouterr().out

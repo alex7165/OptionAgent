@@ -1,0 +1,104 @@
+diff --git a/app/analysis/strategy_selector.py b/app/analysis/strategy_selector.py
+index 5bf1457..6f51ace 100644
+--- a/app/analysis/strategy_selector.py
++++ b/app/analysis/strategy_selector.py
+@@ -44,15 +44,6 @@ class StrategySelector:
+         self.strike_selector = strike_selector or StrikeSelector()
+         self.historical_adapter = historical_adapter
+ 
+-    def select(
+-        self,
+-        defined_risk: bool,
+-    ) -> Strategy:
+-        if defined_risk:
+-            return Strategy.IRON_CONDOR
+-
+-        return Strategy.SHORT_STRANGLE
+-
+     def select_strikes(
+         self,
+         chain: ExpirationChain,
+@@ -107,8 +98,14 @@ class StrategySelector:
+             )
+ 
+         if price_analyses is None:
+-            raise ValueError(
+-                "price_analyses are required when historical_adapter is set"
++            selection = self.strike_selector.select_by_expected_move(
++                chain=chain,
++                expected_move=expected_move,
++                strategy=strategy,
++            )
++            return StrategyStrikeSelectionResult(
++                strike_selection=selection,
++                source=StrikeSelectionSource.EXPECTED_MOVE,
+             )
+         if exit_trading_day_index is None:
+             raise ValueError(
+diff --git a/tests/test_strategy_selector.py b/tests/test_strategy_selector.py
+index 33be5f1..c66a8ca 100644
+--- a/tests/test_strategy_selector.py
++++ b/tests/test_strategy_selector.py
+@@ -94,22 +94,6 @@ def make_strike_selection(
+     )
+ 
+ 
+-def test_selects_iron_condor_for_defined_risk() -> None:
+-    selector = StrategySelector()
+-
+-    strategy = selector.select(defined_risk=True)
+-
+-    assert strategy is Strategy.IRON_CONDOR
+-
+-
+-def test_selects_short_strangle_for_undefined_risk() -> None:
+-    selector = StrategySelector()
+-
+-    strategy = selector.select(defined_risk=False)
+-
+-    assert strategy is Strategy.SHORT_STRANGLE
+-
+-
+ def test_selects_strikes_with_existing_behavior_without_adapter() -> None:
+     chain = make_chain()
+     expected_move = make_expected_move()
+@@ -185,3 +169,39 @@ def test_uses_historical_adapter_when_present() -> None:
+             "strategy": Strategy.IRON_CONDOR,
+         }
+     ]
++
++
++def test_falls_back_to_expected_move_when_historical_inputs_missing() -> None:
++    chain = make_chain()
++    expected_move = make_expected_move()
++    expected_selection = make_strike_selection(
++        strategy=Strategy.SHORT_STRANGLE
++    )
++    fallback_selector = RecordingStrikeSelector(
++        result=expected_selection
++    )
++    historical_adapter = RecordingHistoricalAdapter(
++        strike_selection=make_strike_selection()
++    )
++    selector = StrategySelector(
++        strike_selector=fallback_selector,
++        historical_adapter=historical_adapter,
++    )
++
++    result = selector.select_strikes_with_details(
++        chain=chain,
++        underlying_price=200.0,
++        expected_move=expected_move,
++        strategy=Strategy.SHORT_STRANGLE,
++    )
++
++    assert result.strike_selection is expected_selection
++    assert result.source.value == "expected_move"
++    assert historical_adapter.calls == []
++    assert fallback_selector.calls == [
++        {
++            "chain": chain,
++            "expected_move": expected_move,
++            "strategy": Strategy.SHORT_STRANGLE,
++        }
++    ]

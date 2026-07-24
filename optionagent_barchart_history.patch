@@ -1,0 +1,224 @@
+--- a/app/analysis/earnings_crush_analyzer.py	2026-07-21 08:16:04.000000000 +0000
++++ b/app/analysis/earnings_crush_analyzer.py	2026-07-24 08:34:31.237180405 +0000
+@@ -129,10 +129,21 @@
+ 
+             candidate.expected_move = expected_move
+ 
+-            historical_inputs = self._load_historical_inputs(
+-                event.symbol
++            iv_rank = self.volatility_provider.get_iv_rank(event.symbol)
++            iv_percentile = (
++                self.volatility_provider.get_iv_percentile(event.symbol)
+             )
+ 
++            try:
++                historical_inputs = self._load_historical_inputs(
++                    event.symbol
++                )
++            except Exception as error:
++                historical_inputs = None
++                candidate.historical_analysis_error = (
++                    f"{type(error).__name__}: {error}"
++                )
++
+             selection_kwargs = {
+                 "chain": chain,
+                 "underlying_price": snapshot.quote.price,
+@@ -200,14 +211,8 @@
+                 put=selection.put,
+                 call=selection.call,
+                 expected_move=expected_move,
+-                iv_rank=self.volatility_provider.get_iv_rank(
+-                    event.symbol
+-                ),
+-                iv_percentile=(
+-                    self.volatility_provider.get_iv_percentile(
+-                        event.symbol
+-                    )
+-                ),
++                iv_rank=iv_rank,
++                iv_percentile=iv_percentile,
+             )
+ 
+             candidate.liquidity = self.liquidity_analyzer.analyze(
+--- a/app/analysis/earnings_crush_candidate.py	2026-07-15 09:28:58.000000000 +0000
++++ b/app/analysis/earnings_crush_candidate.py	2026-07-24 08:34:31.237180405 +0000
+@@ -29,6 +29,7 @@
+     strike_selection_before_liquidity: StrikeSelection | None = None
+     strike_selection_source: StrikeSelectionSource | None = None
+     historical_selection_result: HistoricalStrikeSelectionResult | None = None
++    historical_analysis_error: str | None = None
+     liquidity_optimization_reason: str | None = None
+     expiration: date | None = None
+     decision_report: "DecisionReport | None" = None
+--- a/app/analysis/decision_report.py	2026-07-15 09:36:23.000000000 +0000
++++ b/app/analysis/decision_report.py	2026-07-24 08:36:04.273180405 +0000
+@@ -12,6 +12,8 @@
+ class DecisionReport:
+     selection_source: StrikeSelectionSource
+     expected_move_percent: float
++    iv_rank: float | None
++    iv_percentile: float | None
+     historical_sample_size: int | None
+     exit_trading_day_index: int | None
+     historical_average_abs_close_move_percent: float | None
+@@ -79,6 +81,16 @@
+             return DecisionReport(
+                 selection_source=candidate.strike_selection_source,
+                 expected_move_percent=expected_move_percent,
++                iv_rank=(
++                    candidate.option_data.iv_rank
++                    if candidate.option_data
++                    else None
++                ),
++                iv_percentile=(
++                    candidate.option_data.iv_percentile
++                    if candidate.option_data
++                    else None
++                ),
+                 historical_sample_size=None,
+                 exit_trading_day_index=None,
+                 historical_average_abs_close_move_percent=None,
+@@ -139,6 +151,16 @@
+         return DecisionReport(
+             selection_source=candidate.strike_selection_source,
+             expected_move_percent=expected_move_percent,
++            iv_rank=(
++                candidate.option_data.iv_rank
++                if candidate.option_data
++                else None
++            ),
++            iv_percentile=(
++                candidate.option_data.iv_percentile
++                if candidate.option_data
++                else None
++            ),
+             historical_sample_size=call.observation_count,
+             exit_trading_day_index=call.exit_trading_day_index,
+             historical_average_abs_close_move_percent=(
+--- a/app/run_earnings_test.py	2026-07-15 09:36:23.000000000 +0000
++++ b/app/run_earnings_test.py	2026-07-24 08:36:04.273180405 +0000
+@@ -99,7 +99,44 @@
+         else "Expected-Move-Fallback"
+     )
+     lines = [
+-        f"      Auswahlquelle: {source_text}",
++        "      Aktuelle Volatilität:",
++        (
++            "        IV Rank: "
++            f"{report.iv_rank if report.iv_rank is not None else '-'}"
++        ),
++        (
++            "        IV Percentile: "
++            f"{report.iv_percentile if report.iv_percentile is not None else '-'}"
++        ),
++        "        Quelle: Barchart",
++        "      Historische Earnings-Analyse:",
++    ]
++
++    historical_error = getattr(candidate, "historical_analysis_error", None)
++    if historical_error:
++        lines.extend([
++            "        Status: nicht verfügbar; Expected-Move-Fallback aktiv",
++            f"        Fehler: {historical_error}",
++            "        Quelle: Earnings API + PriceHistoryProvider",
++        ])
++    elif report.historical_sample_size is None:
++        lines.extend([
++            "        Stichprobe: keine historischen Daten",
++            "        Quelle: Earnings API + PriceHistoryProvider",
++        ])
++    else:
++        lines.extend([
++            f"        Stichprobe: {report.historical_sample_size}",
++            "        Quelle: Earnings API + PriceHistoryProvider",
++        ])
++
++    lines.extend([
++        f"      Strike-Auswahl: {source_text}",
++        (
++            "        Quelle: Historie + aktuelle Volatilität"
++            if report.historical_sample_size is not None
++            else "        Quelle: Expected Move + aktuelle Volatilität"
++        ),
+         (
+             "      Trade Score: "
+             f"{report.trade_score.total}/100 "
+@@ -113,7 +150,7 @@
+             f"{report.trade_score.liquidity_component:.1f}/30"
+             ")"
+         ),
+-    ]
++    ])
+ 
+     if (
+         report.initial_put_strike is not None
+--- a/tests/test_earnings_crush_historical_selection.py	2026-07-21 08:16:13.000000000 +0000
++++ b/tests/test_earnings_crush_historical_selection.py	2026-07-24 08:35:00.913180405 +0000
+@@ -161,3 +161,38 @@
+         -12.5,
+     )
+     assert selector.calls[0]["policy"] is policy
++
++
++class FailingHistoricalInputsLoader:
++
++    def __init__(self, calls: list[str]) -> None:
++        self.calls = calls
++
++    def load(self, symbol: str):
++        self.calls.append("historical")
++        raise RuntimeError("earnings api unavailable")
++
++
++def test_loads_barchart_before_history_and_falls_back_on_history_error() -> None:
++    calls: list[str] = []
++    selector = RecordingStrategySelector(make_selection())
++    analyzer = make_analyzer(
++        selector,
++        FailingHistoricalInputsLoader(calls),
++    )
++    analyzer.volatility_provider = SimpleNamespace(
++        get_iv_rank=lambda symbol: calls.append("iv_rank") or 72.0,
++        get_iv_percentile=(
++            lambda symbol: calls.append("iv_percentile") or 81.0
++        ),
++    )
++
++    candidate = analyzer.create_candidates([make_event()])[0]
++
++    assert calls == ["iv_rank", "iv_percentile", "historical"]
++    assert candidate.option_data.iv_rank == 72.0
++    assert candidate.option_data.iv_percentile == 81.0
++    assert candidate.historical_analysis_error == (
++        "RuntimeError: earnings api unavailable"
++    )
++    assert "price_analyses" not in selector.calls[0]
+--- a/tests/test_decision_report.py	2026-07-15 09:36:31.000000000 +0000
++++ b/tests/test_decision_report.py	2026-07-24 08:36:04.273180405 +0000
+@@ -8,6 +8,7 @@
+ from app.analysis.historical_strike_risk_grid_analyzer import HistoricalStrikeRiskGrid
+ from app.analysis.historical_strike_selection_service import HistoricalStrikeSelectionResult
+ from app.analysis.liquidity_rating import LiquidityRating
++from app.analysis.option_data import OptionData
+ from app.analysis.historical_strike_selector import (
+     HistoricalStrikeRecommendation,
+     HistoricalStrikeSelection,
+@@ -135,3 +136,17 @@
+     assert report.trade_score.historical_risk_component > 0
+     assert report.trade_score.historical_sample_component > 0
+     assert report.trade_score.liquidity_component == 30.0
++
++
++def test_report_contains_current_barchart_volatility() -> None:
++    candidate = _candidate()
++    candidate.option_data = OptionData(
++        iv_rank=72.0,
++        iv_percentile=81.0,
++    )
++
++    report = DecisionReportBuilder().build(candidate)
++
++    assert report is not None
++    assert report.iv_rank == 72.0
++    assert report.iv_percentile == 81.0
