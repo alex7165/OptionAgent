@@ -28,7 +28,7 @@ class DummyMassiveClient:
         return self.payload
 
 
-def test_get_daily_bars_returns_normalized_history() -> None:
+def test_get_daily_bars_returns_normalized_history(tmp_path) -> None:
     client = DummyMassiveClient(
         {
             "adjusted": False,
@@ -54,7 +54,7 @@ def test_get_daily_bars_returns_normalized_history() -> None:
         }
     )
 
-    provider = MassivePriceHistoryProvider(client=client)
+    provider = MassivePriceHistoryProvider(client=client, cache_dir=tmp_path)
 
     bars = provider.get_daily_bars(
         symbol=" nvda ",
@@ -89,7 +89,7 @@ def test_get_daily_bars_returns_normalized_history() -> None:
     assert bars[1].close == 187.0
 
 
-def test_get_daily_bars_returns_empty_tuple_without_results() -> None:
+def test_get_daily_bars_returns_empty_tuple_without_results(tmp_path) -> None:
     client = DummyMassiveClient(
         {
             "status": "OK",
@@ -97,7 +97,7 @@ def test_get_daily_bars_returns_empty_tuple_without_results() -> None:
         }
     )
 
-    provider = MassivePriceHistoryProvider(client=client)
+    provider = MassivePriceHistoryProvider(client=client, cache_dir=tmp_path)
 
     bars = provider.get_daily_bars(
         symbol="NVDA",
@@ -108,9 +108,10 @@ def test_get_daily_bars_returns_empty_tuple_without_results() -> None:
     assert bars == ()
 
 
-def test_rejects_empty_symbol() -> None:
+def test_rejects_empty_symbol(tmp_path) -> None:
     provider = MassivePriceHistoryProvider(
-        client=DummyMassiveClient({})
+        client=DummyMassiveClient({}),
+        cache_dir=tmp_path,
     )
 
     with pytest.raises(
@@ -124,9 +125,10 @@ def test_rejects_empty_symbol() -> None:
         )
 
 
-def test_rejects_invalid_date_range() -> None:
+def test_rejects_invalid_date_range(tmp_path) -> None:
     provider = MassivePriceHistoryProvider(
-        client=DummyMassiveClient({})
+        client=DummyMassiveClient({}),
+        cache_dir=tmp_path,
     )
 
     with pytest.raises(
@@ -140,14 +142,15 @@ def test_rejects_invalid_date_range() -> None:
         )
 
 
-def test_rejects_invalid_results() -> None:
+def test_rejects_invalid_results(tmp_path) -> None:
     provider = MassivePriceHistoryProvider(
         client=DummyMassiveClient(
             {
                 "status": "OK",
                 "results": {},
             }
-        )
+        ),
+        cache_dir=tmp_path,
     )
 
     with pytest.raises(
@@ -159,3 +162,64 @@ def test_rejects_invalid_results() -> None:
             start_date=date(2026, 7, 9),
             end_date=date(2026, 7, 10),
         )
+
+def test_get_daily_bars_writes_and_reuses_cache(tmp_path) -> None:
+    payload = {
+        "status": "OK",
+        "results": [
+            {
+                "o": 180.0,
+                "h": 185.0,
+                "l": 178.0,
+                "c": 183.5,
+                "v": 42_000_000,
+                "t": 1783555200000,
+            }
+        ],
+    }
+    client = DummyMassiveClient(payload)
+    provider = MassivePriceHistoryProvider(
+        client=client,
+        cache_dir=tmp_path,
+    )
+
+    first_bars = provider.get_daily_bars(
+        symbol="NVDA",
+        start_date=date(2026, 7, 9),
+        end_date=date(2026, 7, 10),
+    )
+    second_bars = provider.get_daily_bars(
+        symbol="nvda",
+        start_date=date(2026, 7, 9),
+        end_date=date(2026, 7, 10),
+    )
+
+    assert first_bars == second_bars
+    assert len(client.calls) == 1
+    assert (
+        tmp_path / "NVDA_2026-07-09_2026-07-10.json"
+    ).exists()
+
+
+def test_get_daily_bars_ignores_invalid_cache(tmp_path) -> None:
+    cache_path = tmp_path / "NVDA_2026-07-09_2026-07-10.json"
+    cache_path.write_text("not valid json", encoding="utf-8")
+    client = DummyMassiveClient(
+        {
+            "status": "OK",
+            "results": [],
+        }
+    )
+    provider = MassivePriceHistoryProvider(
+        client=client,
+        cache_dir=tmp_path,
+    )
+
+    bars = provider.get_daily_bars(
+        symbol="NVDA",
+        start_date=date(2026, 7, 9),
+        end_date=date(2026, 7, 10),
+    )
+
+    assert bars == ()
+    assert len(client.calls) == 1
