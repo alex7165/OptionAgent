@@ -29,6 +29,7 @@ class EarningsCrushCandidate:
     strike_selection_before_liquidity: StrikeSelection | None = None
     strike_selection_source: StrikeSelectionSource | None = None
     historical_selection_result: HistoricalStrikeSelectionResult | None = None
+    historical_analysis_error: str | None = None
     liquidity_optimization_reason: str | None = None
     expiration: date | None = None
     decision_report: "DecisionReport | None" = None

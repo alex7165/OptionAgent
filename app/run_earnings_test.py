@@ -99,7 +99,44 @@ def format_selection_details(candidate) -> list[str]:
         else "Expected-Move-Fallback"
     )
     lines = [
-        f"      Auswahlquelle: {source_text}",
+        "      Aktuelle Volatilität:",
+        (
+            "        IV Rank: "
+            f"{report.iv_rank if report.iv_rank is not None else '-'}"
+        ),
+        (
+            "        IV Percentile: "
+            f"{report.iv_percentile if report.iv_percentile is not None else '-'}"
+        ),
+        "        Quelle: Barchart",
+        "      Historische Earnings-Analyse:",
+    ]
+
+    historical_error = getattr(candidate, "historical_analysis_error", None)
+    if historical_error:
+        lines.extend([
+            "        Status: nicht verfügbar; Expected-Move-Fallback aktiv",
+            f"        Fehler: {historical_error}",
+            "        Quelle: Earnings API + PriceHistoryProvider",
+        ])
+    elif report.historical_sample_size is None:
+        lines.extend([
+            "        Stichprobe: keine historischen Daten",
+            "        Quelle: Earnings API + PriceHistoryProvider",
+        ])
+    else:
+        lines.extend([
+            f"        Stichprobe: {report.historical_sample_size}",
+            "        Quelle: Earnings API + PriceHistoryProvider",
+        ])
+
+    lines.extend([
+        f"      Strike-Auswahl: {source_text}",
+        (
+            "        Quelle: Historie + aktuelle Volatilität"
+            if report.historical_sample_size is not None
+            else "        Quelle: Expected Move + aktuelle Volatilität"
+        ),
         (
             "      Trade Score: "
             f"{report.trade_score.total}/100 "
@@ -113,7 +150,7 @@ def format_selection_details(candidate) -> list[str]:
             f"{report.trade_score.liquidity_component:.1f}/30"
             ")"
         ),
-    ]
+    ])
 
     if (
         report.initial_put_strike is not None

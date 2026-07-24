@@ -129,9 +129,20 @@ class EarningsCrushAnalyzer:
 
             candidate.expected_move = expected_move
 
-            historical_inputs = self._load_historical_inputs(
-                event.symbol
+            iv_rank = self.volatility_provider.get_iv_rank(event.symbol)
+            iv_percentile = (
+                self.volatility_provider.get_iv_percentile(event.symbol)
             )
+
+            try:
+                historical_inputs = self._load_historical_inputs(
+                    event.symbol
+                )
+            except Exception as error:
+                historical_inputs = None
+                candidate.historical_analysis_error = (
+                    f"{type(error).__name__}: {error}"
+                )
 
             selection_kwargs = {
                 "chain": chain,
@@ -200,14 +211,8 @@ class EarningsCrushAnalyzer:
                 put=selection.put,
                 call=selection.call,
                 expected_move=expected_move,
-                iv_rank=self.volatility_provider.get_iv_rank(
-                    event.symbol
-                ),
-                iv_percentile=(
-                    self.volatility_provider.get_iv_percentile(
-                        event.symbol
-                    )
-                ),
+                iv_rank=iv_rank,
+                iv_percentile=iv_percentile,
             )
 
             candidate.liquidity = self.liquidity_analyzer.analyze(

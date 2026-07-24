@@ -8,6 +8,7 @@ from app.analysis.historical_strike_risk_analyzer import StrikeSide
 from app.analysis.historical_strike_risk_grid_analyzer import HistoricalStrikeRiskGrid
 from app.analysis.historical_strike_selection_service import HistoricalStrikeSelectionResult
 from app.analysis.liquidity_rating import LiquidityRating
+from app.analysis.option_data import OptionData
 from app.analysis.historical_strike_selector import (
     HistoricalStrikeRecommendation,
     HistoricalStrikeSelection,
@@ -135,3 +136,17 @@ def test_trade_score_uses_market_history_sample_and_liquidity():
     assert report.trade_score.historical_risk_component > 0
     assert report.trade_score.historical_sample_component > 0
     assert report.trade_score.liquidity_component == 30.0
+
+
+def test_report_contains_current_barchart_volatility() -> None:
+    candidate = _candidate()
+    candidate.option_data = OptionData(
+        iv_rank=72.0,
+        iv_percentile=81.0,
+    )
+
+    report = DecisionReportBuilder().build(candidate)
+
+    assert report is not None
+    assert report.iv_rank == 72.0
+    assert report.iv_percentile == 81.0

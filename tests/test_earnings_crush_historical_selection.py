@@ -161,3 +161,38 @@ def test_passes_historical_inputs_to_strategy_selector() -> None:
         -12.5,
     )
     assert selector.calls[0]["policy"] is policy
+
+
+class FailingHistoricalInputsLoader:
+
+    def __init__(self, calls: list[str]) -> None:
+        self.calls = calls
+
+    def load(self, symbol: str):
+        self.calls.append("historical")
+        raise RuntimeError("earnings api unavailable")
+
+
+def test_loads_barchart_before_history_and_falls_back_on_history_error() -> None:
+    calls: list[str] = []
+    selector = RecordingStrategySelector(make_selection())
+    analyzer = make_analyzer(
+        selector,
+        FailingHistoricalInputsLoader(calls),
+    )
+    analyzer.volatility_provider = SimpleNamespace(
+        get_iv_rank=lambda symbol: calls.append("iv_rank") or 72.0,
+        get_iv_percentile=(
+            lambda symbol: calls.append("iv_percentile") or 81.0
+        ),
+    )
+
+    candidate = analyzer.create_candidates([make_event()])[0]
+
+    assert calls == ["iv_rank", "iv_percentile", "historical"]
+    assert candidate.option_data.iv_rank == 72.0
+    assert candidate.option_data.iv_percentile == 81.0
+    assert candidate.historical_analysis_error == (
+        "RuntimeError: earnings api unavailable"
+    )
+    assert "price_analyses" not in selector.calls[0]

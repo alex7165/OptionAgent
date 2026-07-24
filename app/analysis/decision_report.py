@@ -12,6 +12,8 @@ from app.analysis.trade_score import TradeScore, TradeScoreCalculator
 class DecisionReport:
     selection_source: StrikeSelectionSource
     expected_move_percent: float
+    iv_rank: float | None
+    iv_percentile: float | None
     historical_sample_size: int | None
     exit_trading_day_index: int | None
     historical_average_abs_close_move_percent: float | None
@@ -79,6 +81,16 @@ class DecisionReportBuilder:
             return DecisionReport(
                 selection_source=candidate.strike_selection_source,
                 expected_move_percent=expected_move_percent,
+                iv_rank=(
+                    candidate.option_data.iv_rank
+                    if candidate.option_data
+                    else None
+                ),
+                iv_percentile=(
+                    candidate.option_data.iv_percentile
+                    if candidate.option_data
+                    else None
+                ),
                 historical_sample_size=None,
                 exit_trading_day_index=None,
                 historical_average_abs_close_move_percent=None,
@@ -139,6 +151,16 @@ class DecisionReportBuilder:
         return DecisionReport(
             selection_source=candidate.strike_selection_source,
             expected_move_percent=expected_move_percent,
+            iv_rank=(
+                candidate.option_data.iv_rank
+                if candidate.option_data
+                else None
+            ),
+            iv_percentile=(
+                candidate.option_data.iv_percentile
+                if candidate.option_data
+                else None
+            ),
             historical_sample_size=call.observation_count,
             exit_trading_day_index=call.exit_trading_day_index,
             historical_average_abs_close_move_percent=(
