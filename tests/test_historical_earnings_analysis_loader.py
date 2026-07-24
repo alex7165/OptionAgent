@@ -193,3 +193,33 @@ def test_rejects_empty_symbol_without_loading_data() -> None:
 
     assert earnings_provider.calls == []
     assert price_history_provider.calls == []
+
+class WarmableRecordingPriceHistoryProvider(RecordingPriceHistoryProvider):
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.warm_requests: list[tuple[tuple[str, date, date], ...]] = []
+
+    def warm_cache(self, requests) -> None:
+        self.warm_requests.append(tuple(requests))
+
+
+def test_warms_price_history_cache_before_loading_series() -> None:
+    reaction = make_reaction(report_date=date(2026, 5, 20))
+    earnings_provider = RecordingEarningsProvider(reactions=(reaction,))
+    price_history_provider = WarmableRecordingPriceHistoryProvider()
+    loader = HistoricalEarningsAnalysisLoader(
+        earnings_provider=earnings_provider,
+        price_series_loader=HistoricalEarningsPriceSeriesLoader(
+            price_history_provider=price_history_provider,
+        ),
+    )
+
+    loader.load(
+        symbol="NVDA",
+        end_date_resolver=lambda earnings: date(2026, 5, 22),
+    )
+
+    assert price_history_provider.warm_requests == [
+        (("NVDA", date(2026, 5, 20), date(2026, 5, 22)),)
+    ]

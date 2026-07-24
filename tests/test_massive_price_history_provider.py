@@ -223,3 +223,66 @@ def test_get_daily_bars_ignores_invalid_cache(tmp_path) -> None:
 
     assert bars == ()
     assert len(client.calls) == 1
+
+
+def test_warm_cache_downloads_only_missing_ranges(tmp_path) -> None:
+    cached_path = tmp_path / "NVDA_2026-07-09_2026-07-10.json"
+    cached_path.write_text(
+        '{"status": "OK", "results": []}',
+        encoding="utf-8",
+    )
+    client = DummyMassiveClient({"status": "OK", "results": []})
+    provider = MassivePriceHistoryProvider(
+        client=client,
+        cache_dir=tmp_path,
+        request_interval_seconds=0,
+    )
+
+    provider.warm_cache(
+        (
+            ("NVDA", date(2026, 7, 9), date(2026, 7, 10)),
+            ("NVDA", date(2026, 4, 20), date(2026, 4, 24)),
+        )
+    )
+
+    assert len(client.calls) == 1
+    assert client.calls[0]["path"].endswith("2026-04-20/2026-04-24")
+
+
+def test_uncached_requests_are_rate_limited(tmp_path) -> None:
+    clock_values = iter((100.0, 100.0, 112.5))
+    sleeps: list[float] = []
+    client = DummyMassiveClient({"status": "OK", "results": []})
+    provider = MassivePriceHistoryProvider(
+        client=client,
+        cache_dir=tmp_path,
+        request_interval_seconds=12.5,
+        sleep=sleeps.append,
+        monotonic=lambda: next(clock_values),
+    )
+
+    provider.get_daily_bars(
+        symbol="NVDA",
+        start_date=date(2026, 7, 9),
+        end_date=date(2026, 7, 10),
+    )
+    provider.get_daily_bars(
+        symbol="NVDA",
+        start_date=date(2026, 4, 20),
+        end_date=date(2026, 4, 24),
+    )
+
+    assert sleeps == [12.5]
+    assert len(client.calls) == 2
+
+
+def test_rejects_negative_request_interval(tmp_path) -> None:
+    with pytest.raises(
+        ValueError,
+        match="request_interval_seconds must not be negative",
+    ):
+        MassivePriceHistoryProvider(
+            client=DummyMassiveClient({}),
+            cache_dir=tmp_path,
+            request_interval_seconds=-1,
+        )

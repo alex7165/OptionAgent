@@ -1,7 +1,9 @@
 import json
+import os
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterable
 
 from app.marketdata.massive_client import MassiveClient
 from app.marketdata.price_history_provider import (
@@ -19,9 +21,30 @@ class MassivePriceHistoryProvider(PriceHistoryProvider):
         client: MassiveClient | None = None,
         api_key: str | None = None,
         cache_dir: str | Path | None = None,
+        request_interval_seconds: float | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self.client = client or MassiveClient(api_key=api_key)
         self.cache_dir = Path(cache_dir or self.DEFAULT_CACHE_DIR)
+        configured_interval = (
+            request_interval_seconds
+            if request_interval_seconds is not None
+            else float(
+                os.getenv(
+                    "MASSIVE_REQUEST_INTERVAL_SECONDS",
+                    "12.5",
+                )
+            )
+        )
+        if configured_interval < 0:
+            raise ValueError(
+                "request_interval_seconds must not be negative"
+            )
+        self.request_interval_seconds = configured_interval
+        self.sleep = sleep
+        self.monotonic = monotonic
+        self._last_request_started_at: float | None = None
 
     def get_daily_bars(
         self,
@@ -54,6 +77,8 @@ class MassivePriceHistoryProvider(PriceHistoryProvider):
             f"{start_date.isoformat()}/{end_date.isoformat()}"
         )
 
+        self._wait_before_request()
+
         payload = self.client.get(
             path=path,
             params={
@@ -66,6 +91,39 @@ class MassivePriceHistoryProvider(PriceHistoryProvider):
         bars = self._parse_payload(payload)
         self._write_cache(cache_path, payload)
         return bars
+
+
+    def warm_cache(
+        self,
+        requests: Iterable[tuple[str, date, date]],
+    ) -> None:
+        for symbol, start_date, end_date in requests:
+            normalized_symbol = symbol.strip().upper()
+            cache_path = self._cache_path(
+                symbol=normalized_symbol,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            if self._read_cache(cache_path) is not None:
+                continue
+
+            self.get_daily_bars(
+                symbol=normalized_symbol,
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+    def _wait_before_request(self) -> None:
+        now = self.monotonic()
+
+        if self._last_request_started_at is not None:
+            elapsed = now - self._last_request_started_at
+            remaining = self.request_interval_seconds - elapsed
+            if remaining > 0:
+                self.sleep(remaining)
+                now = self.monotonic()
+
+        self._last_request_started_at = now
 
     def _cache_path(
         self,

@@ -51,6 +51,20 @@ class HistoricalEarningsAnalysisLoader:
             )
         )
 
+        provider = self.price_series_loader.price_history_provider
+        warm_cache = getattr(provider, "warm_cache", None)
+        if callable(warm_cache):
+            warm_cache(
+                (
+                    (
+                        earnings.symbol,
+                        earnings.report_date,
+                        end_date_resolver(earnings),
+                    )
+                    for earnings in earnings_reactions
+                )
+            )
+
         price_series = tuple(
             self.price_series_loader.load(
                 earnings=earnings,
